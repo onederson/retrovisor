@@ -790,7 +790,7 @@
       });
     });
 
-    // Tela 4: Botoes superiores (tela == 3, mesmo componente de tecla menor)
+    // Tela 6: Botoes superiores (tela == 3, mesmo componente de tecla menor)
     const containerTela3 = document.getElementById('topo-acoes-tela-3');
     if (containerTela3) {
       containerTela3.innerHTML = '';
@@ -1676,7 +1676,7 @@
     // Atualizacao da Tela PC (Tela 2)
     atualizarTelaPC(dados);
 
-    // Historico OmniRoute (Tela 4)
+    // Historico OmniRoute (Tela 6)
     const historicoOmni = Array.isArray(omni.historico) ? omni.historico.slice(0, 10) : [];
     const tbodyHist = document.getElementById('corpo-tabela-historico');
     if (tbodyHist) {
@@ -1703,7 +1703,7 @@
       }
     }
 
-    // Bloco Celular (Tela 4)
+    // Bloco Celular (Tela 6)
     const blocoCel = extrairBloco(dados, 'celular');
     atualizarIndicadorErro('erro-celular', blocoCel.erro, blocoCel.msgErro);
     const cel = blocoCel.val || {};

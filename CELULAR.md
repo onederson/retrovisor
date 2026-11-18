@@ -4,7 +4,7 @@ Decisão: o aparelho fica **sem root** (bootloader travado). Desbloquear apagari
 
 ## Bateria (uso 24/7 na tomada)
 - Configurações > Assistência do aparelho e bateria > Bateria > Mais configurações > **Proteger bateria**: liga a trava de carga em **85%**.
-- A Tela 3 do painel mostra o nível. Fica âmbar acima de 85%, sinal de que a trava não está agindo.
+- A tela 6 do painel (Modelos e Celular) mostra o nível. Fica âmbar acima de 85%, sinal de que a trava não está agindo.
 
 ## Depuração USB (já ativa)
 - Opções do desenvolvedor > Depuração USB: ligada. O PC já está autorizado (`adb devices` mostra `RX8M301G98B device`).
@@ -73,7 +73,7 @@ Depois de cada reinício do celular, ligue o cabo uma vez e rode `adb tcpip 5555
 - Se o desbloqueio falhar por firewall, crie a regra no PowerShell como administrador:
   `New-NetFirewallRule -DisplayName 'Remote Fingerprint Unlock' -Direction Inbound -Protocol TCP -LocalPort 4009 -Profile Private -Action Allow`
 
-## Energia (tela 5 do painel)
+## Energia (tela 7 do painel)
 - Botão gigante: tocar **suspende** (S3; a hibernação está desligada neste PC). Arrastar ↕ troca para Desligar, Reiniciar e Bloquear. Desligar e Reiniciar pedem um segundo toque em até 4 s.
 - **Tela de cada estado:** antes de sumir, o PC avisa o celular. O aviso vale para qualquer caminho: painel, menu Iniciar, botão físico ou inatividade (`server/collectors/bloqueio.py`: `PBT_APMSUSPEND` e `WM_QUERYENDSESSION`; reiniciar ou desligar sai do evento 1074 do log System). O portão fecha na hora com **PC suspenso**, **PC desligado** ou **Reiniciando…**, e o ON fica esperando o toque. Se o PC some sem avisar (queda de energia, Wi-Fi), aparece "PC desligado ou dormindo". Depois de 2 min sem toque, a tela esmaece para poupar o OLED, e o primeiro toque acende de novo.
 - **Barra de 0 a 100%:** ao tocar no ON, ao reiniciar ou quando o PC liga sozinho, o portão mostra uma barra. 0–25% ligando/acordando, 35–55% Windows iniciando, **60% Windows na tela de bloqueio**, 70–96% entrando no Windows e abrindo o painel, **100% = painel conectado**, e aí a porta abre. Se a barra chegou aos 60% sem um toque seu (reinício, PC ligado pelo botão físico), ela some e fica o DESBLOQUEAR. Se você já tinha tocado no LIGAR, ela espera em 60% e o botão abre o leitor. As fases vêm do vigia (porta **8081**, só leitura), que roda desde o boot, antes do logon.
@@ -87,7 +87,7 @@ Depois de cada reinício do celular, ligue o cabo uma vez e rode `adb tcpip 5555
 ## Digital sozinha quando o PC liga ou acorda (vigia)
 - `server/vigia.py` roda como Tarefa Agendada a partir do boot, antes de qualquer logon. Sempre que o PC vai para a tela de bloqueio, ele acende o celular e abre o app de digital pelo adb. Isso vale ao ligar, ao acordar da suspensão, com Win+L, pelo painel ou por inatividade. Depois do desbloqueio, traz o Fully de volta.
 - Painel congelado com o ponto verde e sem dados novos: desde 2026-11-18 ele se reconecta sozinho depois de 6 s sem receber nada do PC.
-- Instalar uma vez, no PowerShell **como administrador**: `powershell -File scriptsigia.ps1`. Para tirar: `scriptsigia.ps1 -Remover`.
-- Log: `cacheigia.log`.
+- Instalar uma vez, no PowerShell **como administrador**: `powershell -File scripts\vigia.ps1`. Para tirar: `scripts\vigia.ps1 -Remover`.
+- Log: `cache\vigia.log`.
 - O vigia também responde o estado do boot em `http://<pc>:8081/` (só leitura, sem token): é dali que vem a barra de carregamento. O instalador libera a porta 8081 na rede privada.
 - Depende do adb por Wi-Fi no ar (ver acima). Sem adb, sobra a reserva do próprio painel: tocar no botão de digital.

@@ -1,3 +1,5 @@
+> **Documento histórico:** é o planejamento inicial. O painel atual tem 7 telas; veja o [README](README.md).
+
 # Planejamento do Projeto: S10+ AI & PC Telemetry + Stream Deck (OLED-Safe)
 
 ## 1. Visão Geral e Objetivo

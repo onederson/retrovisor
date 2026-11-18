@@ -27,7 +27,7 @@ cache = "cache"
 
 [ollama]
 url = "http://127.0.0.1:11434"
-# Botoes "Load X" da Tela 3: rotulo = nome do modelo no Ollama
+# Botoes "Carregar X" da tela 6 (Modelos e Celular): rotulo = nome do modelo no Ollama
 modelos = { Qwen = "qwen3.6:35b-a3b-coding", Gemma = "gemma4:12b-it-qat", "GPT-OSS" = "gpt-oss:20b" }
 
 [omniroute]
