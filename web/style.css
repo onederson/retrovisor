@@ -1310,8 +1310,11 @@ html, body {
 }
 
 /* OLED: portao parado por 2 min esmaece; o primeiro toque acende de novo */
-.portao.repouso:not(.aberto) .portao-centro { opacity: 0.3; transition: opacity 1.5s ease; }
-.portao.repouso:not(.aberto) .portao-x { opacity: 0.25; transition: opacity 1.5s ease; }
+/* Em repouso, tudo o que nao e o botao vira preto puro (pixel apagado). O OLED do S10+ mostra uma
+   mancha verde em tons quase pretos (listras das portas, X escuro), e preto puro nao tem esse defeito. */
+.portao.repouso:not(.aberto) .portao-centro { opacity: 0.45; transition: opacity 1.5s ease; }
+.portao.repouso:not(.aberto) .portao-x { opacity: 0; transition: opacity 1.5s ease; }
+.portao.repouso:not(.aberto) .porta { background: var(--fundo); }
 
 /* ===== Tecla rolavel (Só tela 1/2/3): arrastar para cima/baixo ===== */
 .tecla-rolavel {

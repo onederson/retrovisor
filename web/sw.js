@@ -1,6 +1,6 @@
 // Service worker do painel: guarda a "casca" (HTML/CSS/JS) para o celular abrir o portao
 // mesmo com o PC desligado; quando o PC volta, o WebSocket reconecta sozinho.
-const CACHE = 'painel-v8';
+const CACHE = 'painel-v9';
 const CASCA = ['/', '/static/style.css', '/static/app.js', '/static/manifest.json', '/static/icone-192.png', '/static/icone-512.png'];
 
 self.addEventListener('install', (e) => {
