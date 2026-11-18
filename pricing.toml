@@ -1,0 +1,73 @@
+# USD por 1 milhao de tokens. Chave = prefixo do id do modelo (o mais longo que casar vence).
+# cache_write_5m = 1.25x input, cache_write_1h = 2x input, cache_read conforme tabela oficial.
+# Fonte: tabela de modelos da skill claude-api (cache 2026-11-03). Edite quando mudar.
+
+[modelos."claude-fable-5-2"]
+input = 8.00
+output = 40.00
+cache_read = 0.20
+cache_write_5m = 10.00
+cache_write_1h = 16.00
+
+[modelos."claude-fable-5"]
+input = 10.00
+output = 50.00
+cache_read = 1.00
+cache_write_5m = 12.50
+cache_write_1h = 20.00
+
+[modelos."claude-opus-5-5"]
+input = 4.00
+output = 20.00
+cache_read = 0.20
+cache_write_5m = 5.00
+cache_write_1h = 8.00
+
+[modelos."claude-opus-5"]
+input = 5.00
+output = 25.00
+cache_read = 0.50
+cache_write_5m = 6.25
+cache_write_1h = 10.00
+
+[modelos."claude-opus-4"]
+input = 5.00
+output = 25.00
+cache_read = 0.50
+cache_write_5m = 6.25
+cache_write_1h = 10.00
+
+[modelos."claude-sonnet-5-5"]
+input = 2.00
+output = 10.00
+cache_read = 0.10
+cache_write_5m = 2.50
+cache_write_1h = 4.00
+
+[modelos."claude-sonnet-5"]
+input = 2.00
+output = 10.00
+cache_read = 0.20
+cache_write_5m = 2.50
+cache_write_1h = 4.00
+
+[modelos."claude-sonnet-4"]
+input = 3.00
+output = 15.00
+cache_read = 0.30
+cache_write_5m = 3.75
+cache_write_1h = 6.00
+
+[modelos."claude-haiku-5-5"]
+input = 0.10
+output = 0.50
+cache_read = 0.01
+cache_write_5m = 0.125
+cache_write_1h = 0.20
+
+[modelos."claude-haiku-4"]
+input = 1.00
+output = 5.00
+cache_read = 0.10
+cache_write_5m = 1.25
+cache_write_1h = 2.00

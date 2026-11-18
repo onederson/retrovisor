@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+psutil
+nvidia-ml-py
+httpx
+pycaw
+pytest
+winrt-runtime
+winrt-Windows.Media.Control
+winrt-Windows.Storage.Streams
+winrt-Windows.Foundation

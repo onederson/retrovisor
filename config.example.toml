@@ -1,0 +1,62 @@
+[servidor]
+host = "0.0.0.0"
+porta = 8080
+# Exigido para clientes que NAO sao localhost (Wi-Fi). Pelo cabo (adb reverse) chega como 127.0.0.1.
+# Troque por um valor seu antes de usar via Wi-Fi.
+token = "troque-este-token"
+
+[intervalos]   # segundos
+hardware = 1
+ollama = 2
+omniroute = 5
+claude = 5
+claude_usage = 120
+agy = 600
+fx = 1800
+celular = 15
+bloqueio = 1
+midia = 1
+
+[caminhos]
+claude_projects = "~/.claude/projects"
+omniroute_db = "~/.omniroute/storage.sqlite"
+maestro_historico = "~/.maestro/historico.jsonl"
+maestro_estado = "~/.maestro/estado.json"
+adb = "C:/platform-tools/adb.exe"
+cache = "cache"
+
+[ollama]
+url = "http://127.0.0.1:11434"
+# Botoes "Load X" da Tela 3: rotulo = nome do modelo no Ollama
+modelos = { Qwen = "qwen3.6:35b-a3b-coding", Gemma = "gemma4:12b-it-qat", "GPT-OSS" = "gpt-oss:20b" }
+
+[omniroute]
+url = "http://127.0.0.1:20128"
+
+[acoes]
+terminal = "wt.exe"
+git_repo = "~/Desktop/Projetos/s10+"   # repositorio do botao Git Status / Abrir Claude
+portas_dev = [3000, 5173, 8000, 5000]
+
+[celular]
+# S10+ no adb por Wi-Fi (scrcpy e bateria). O painel so mexe neste aparelho e fala com o PC pelo Wi-Fi.
+# Depois de reiniciar o celular, ligue o cabo uma vez e rode: adb tcpip 5555
+adb_serial = "192.168.3.6:5555"
+
+[midia]
+# Tela Midia: o que esta tocando no PC (controles de midia do Windows).
+ignorar = ["brave"]   # apps que ficam de fora (parte do nome do app, sem diferenciar maiusculas)
+pular_s = 10          # segundos dos botoes de avancar/voltar
+
+[apps]
+# Tela Apps (grade 4x3), depois de Discord, Rocket League e Arquivos; a ultima tecla e a "Escolher app".
+# rotulo = { menu = "nome do atalho no Menu Iniciar", exe = "processo da janela (para trazer pra frente)" }
+# Cabem 8 aqui. Sem exe, a tecla so abre.
+Brave = { menu = "Brave", exe = "brave.exe" }
+Steam = { menu = "Steam", exe = "steamwebhelper.exe" }
+"Epic Games" = { menu = "Epic Games Launcher", exe = "EpicGamesLauncher.exe" }
+"VS Code" = { menu = "Visual Studio Code", exe = "Code.exe" }
+OBS = { menu = "OBS Studio", exe = "obs64.exe" }
+Telegram = { menu = "Telegram", exe = "Telegram.exe" }
+Obsidian = { menu = "Obsidian", exe = "Obsidian.exe" }
+VLC = { menu = "VLC media player", exe = "vlc.exe" }

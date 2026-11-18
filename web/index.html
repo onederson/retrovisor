@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Painel S10+ OLED</title>
+  <link rel="stylesheet" href="/static/style.css?v=20">
+  <link rel="manifest" href="/static/manifest.json?v=14">
+  <meta name="theme-color" content="#000000">
+  <link rel="icon" href="/static/icone-192.png">
+</head>
+<body>
+  <!-- Barra superior fixa (~36px) -->
+  <header class="barra-superior" id="barra-superior">
+    <div class="topo-esquerda">
+      <span class="hora-local" id="hora-local">--:--</span>
+    </div>
+    <div class="topo-centro">
+      <div class="pilula-topo" id="topo-financeiro">$—</div>
+      <div class="pilula-topo" id="topo-cpu">CPU —</div>
+      <div class="pilula-topo" id="topo-gpu">GPU —</div>
+    </div>
+    <div class="topo-direita">
+      <div class="indicador-paginas" id="indicador-paginas">
+        <span class="ponto-pag ativo" data-indice="0" title="Tela 1: IA"></span>
+        <span class="ponto-pag" data-indice="1" title="Tela 2: PC"></span>
+        <span class="ponto-pag" data-indice="2" title="Tela 3: Windows"></span>
+        <span class="ponto-pag" data-indice="3" title="Tela 4: Mídia"></span>
+        <span class="ponto-pag" data-indice="4" title="Tela 5: Apps"></span>
+        <span class="ponto-pag" data-indice="5" title="Tela 6: Modelos e Celular"></span>
+        <span class="ponto-pag" data-indice="6" title="Tela 7: Energia"></span>
+      </div>
+      <div class="ponto-ws desconectado" id="ponto-ws" title="WebSocket desconectado"></div>
+      <button class="botao-desligar" id="botao-desligar" title="Fechar o painel">
+        <svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.4 6.9a8 8 0 1 0 11.2 0"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Container Horizontal com Swipe (Scroll-Snap) -->
+  <main class="container-horizontal" id="container-horizontal">
+    <!-- Tela 1: Grade 2x2 de Quadrantes (IA) -->
+    <section class="tela" id="tela-1">
+      <div class="grade-quadrantes">
+        <!-- Quadrante 1: Claude -->
+        <article class="quadrante" id="quad-claude">
+          <div class="quad-cabecalho">
+            <span class="quad-titulo">CLAUDE</span>
+            <span class="indicador-erro" id="erro-claude"></span>
+          </div>
+          <div class="quad-conteudo">
+            <div class="lista-barras-claude" id="claude-limites-lista">
+              <div class="linha-dado rotulo-secundario">Sem limites registrados</div>
+            </div>
+            <div class="linha-dado compacto" id="claude-hoje-compacto">
+              Hoje: In — · Out — · CR — · CW —<br>≈ $ API hoje <span class="texto-verde">$—</span> · mês <span class="texto-verde">$—</span>
+            </div>
+            <div class="linha-dado" id="claude-sessao">Sessão: — tok · ≈ $—</div>
+          </div>
+        </article>
+
+        <!-- Quadrante 2: OmniRoute -->
+        <article class="quadrante" id="quad-omniroute">
+          <div class="quad-cabecalho">
+            <span class="quad-titulo">OMNIROUTE</span>
+            <div class="cabecalho-direita">
+              <span class="indicador-erro" id="erro-omniroute"></span>
+              <button type="button" class="botao-servico" id="omniroute-botao" data-servico="omniroute">LIGAR</button>
+              <span class="distintivo-status status-offline" id="omniroute-status">OFFLINE</span>
+            </div>
+          </div>
+          <div class="barra-servico" id="omniroute-barra" hidden>
+            <div class="barra-servico-trilho"><div class="barra-servico-preench" id="omniroute-barra-preench"></div></div>
+            <span class="barra-servico-pct" id="omniroute-barra-pct">0%</span>
+          </div>
+          <div class="quad-conteudo">
+            <div class="grupo-metricas">
+              <div class="subtitulo">Última Chamada</div>
+              <div class="linha-dado destaque" id="omniroute-ultima">—</div>
+            </div>
+            <div class="grupo-metricas">
+              <div class="subtitulo">Métricas Hoje</div>
+              <div class="linha-dado" id="omniroute-reqs">Requisições: —</div>
+              <div class="linha-dado" id="omniroute-acerto">Taxa de Acerto: —</div>
+              <div class="linha-dado" id="omniroute-latencia">Latência Média: —</div>
+            </div>
+          </div>
+        </article>
+
+        <!-- Quadrante 3: Ollama -->
+        <article class="quadrante" id="quad-ollama">
+          <div class="quad-cabecalho">
+            <span class="quad-titulo">OLLAMA</span>
+            <div class="cabecalho-direita">
+              <span class="indicador-erro" id="erro-ollama"></span>
+              <button type="button" class="botao-servico" id="ollama-botao" data-servico="ollama">LIGAR</button>
+              <span class="distintivo-status status-offline" id="ollama-status">OFFLINE</span>
+            </div>
+          </div>
+          <div class="barra-servico" id="ollama-barra" hidden>
+            <div class="barra-servico-trilho"><div class="barra-servico-preench" id="ollama-barra-preench"></div></div>
+            <span class="barra-servico-pct" id="ollama-barra-pct">0%</span>
+          </div>
+          <div class="quad-conteudo">
+            <div class="grupo-metricas">
+              <div class="subtitulo">Velocidade</div>
+              <div class="linha-dado" id="ollama-velocidade">— tok/s</div>
+            </div>
+            <div class="grupo-metricas">
+              <div class="subtitulo">Modelos na VRAM</div>
+              <div class="lista-modelos-ollama" id="ollama-modelos-lista">
+                <div class="linha-dado rotulo-secundario">Nenhum modelo carregado</div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- Quadrante 4: AGY & Financeiro -->
+        <article class="quadrante" id="quad-agy-financeiro">
+          <div class="quad-cabecalho">
+            <span class="quad-titulo">AGY &amp; FINANCEIRO</span>
+            <div class="cabecalho-direita">
+              <span class="indicador-erro" id="erro-agy"></span>
+            </div>
+          </div>
+          <div class="quad-conteudo">
+            <div class="grupo-metricas grupo-limites-agy">
+              <div class="subtitulo">Limites AGY</div>
+              <div class="lista-barras-agy" id="agy-limites-lista">
+                <div class="linha-dado rotulo-secundario">Sem limites registrados</div>
+              </div>
+            </div>
+            <div class="linha-dado" id="agy-maestro">Maestro hoje: —</div>
+            <div class="grupo-metricas bloco-gasto-real">
+              <div class="subtitulo">Gasto Real · <span id="fin-cotacao">USD/BRL —</span></div>
+              <div class="linha-dado"><span id="fin-gasto-hoje">Hoje $—</span> · <span id="fin-gasto-mes">Mês $—</span></div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Tela 2: PC (Estilo Overlay Afterburner) -->
+    <section class="tela" id="tela-pc">
+      <div class="painel-pc">
+        <!-- Colunas Principais: GPU e CPU -->
+        <div class="pc-corpo-colunas">
+          <!-- Coluna GPU -->
+          <article class="pc-coluna pc-coluna-gpu">
+            <div class="pc-coluna-cabecalho">
+              <span class="pc-coluna-titulo" id="pc-gpu-nome">GPU: —</span>
+              <span class="rotulo-secundario" id="pc-gpu-driver">Driver —</span>
+            </div>
+
+            <div class="pc-stats-destaque">
+              <!-- Uso GPU + Sparkline -->
+              <div class="pc-stat-item">
+                <div class="pc-stat-rotulo">USO</div>
+                <div class="pc-stat-valor" id="pc-gpu-uso">—%</div>
+                <canvas class="pc-sparkline" id="spark-gpu-uso"></canvas>
+              </div>
+
+              <!-- Temp GPU + Sparkline -->
+              <div class="pc-stat-item">
+                <div class="pc-stat-rotulo">TEMP</div>
+                <div class="pc-stat-valor" id="pc-gpu-temp">—°C</div>
+                <canvas class="pc-sparkline" id="spark-gpu-temp"></canvas>
+              </div>
+
+              <!-- Power GPU + Sparkline -->
+              <div class="pc-stat-item">
+                <div class="pc-stat-rotulo">POWER</div>
+                <div class="pc-stat-valor pc-stat-pequeno" id="pc-gpu-power">— / — W</div>
+                <canvas class="pc-sparkline" id="spark-gpu-power"></canvas>
+              </div>
+            </div>
+
+            <!-- Linhas de Métricas GPU -->
+            <div class="pc-detalhes-grid">
+              <div class="pc-detalhe-item">
+                <span class="rotulo-secundario">Clock:</span>
+                <span id="pc-gpu-clocks">— MHz</span>
+              </div>
+              <div class="pc-detalhe-item">
+                <span class="rotulo-secundario">Mem Clock:</span>
+                <span id="pc-gpu-mem-clock">— MHz</span>
+              </div>
+              <div class="pc-detalhe-item">
+                <span class="rotulo-secundario">Fan:</span>
+                <span id="pc-gpu-fan">—</span>
+              </div>
+              <div class="pc-detalhe-item">
+                <span class="rotulo-secundario">P-State:</span>
+                <span id="pc-gpu-pstate">—</span>
+              </div>
+              <div class="pc-detalhe-item">
+                <span class="rotulo-secundario">Mem Ctrl:</span>
+                <span id="pc-gpu-mem-ctrl">—</span>
+              </div>
+              <div class="pc-detalhe-item">
+                <span class="rotulo-secundario">Vídeo:</span>
+                <span id="pc-gpu-enc-dec">ENC — · DEC —</span>
+              </div>
+              <div class="pc-detalhe-item">
+                <span class="rotulo-secundario">PCIe:</span>
+                <span id="pc-gpu-pcie">↓ — · ↑ — MB/s</span>
+              </div>
+              <div class="pc-detalhe-item">
+                <span class="rotulo-secundario">Throttle:</span>
+                <div class="lista-throttle" id="pc-gpu-throttle">
+                  <span class="texto-sem-limitacao">sem limitação</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- Coluna CPU -->
+          <article class="pc-coluna pc-coluna-cpu">
+            <div class="pc-coluna-cabecalho">
+              <span class="pc-coluna-titulo" id="pc-cpu-nome">CPU: —</span>
+            </div>
+
+            <div class="pc-stats-destaque">
+              <!-- Uso CPU + Sparkline -->
+              <div class="pc-stat-item">
+                <div class="pc-stat-rotulo">USO</div>
+                <div class="pc-stat-valor" id="pc-cpu-uso">—%</div>
+                <canvas class="pc-sparkline" id="spark-cpu-uso"></canvas>
+              </div>
+
+              <!-- Clock CPU -->
+              <div class="pc-stat-item">
+                <div class="pc-stat-rotulo">CLOCK</div>
+                <div class="pc-stat-valor pc-stat-medio" id="pc-cpu-clock">— MHz</div>
+                <canvas class="pc-sparkline" id="spark-cpu-clock"></canvas>
+              </div>
+
+              <!-- Temp CPU -->
+              <div class="pc-stat-item">
+                <div class="pc-stat-rotulo">TEMP</div>
+                <div class="pc-stat-valor" id="pc-cpu-temp">—</div>
+              </div>
+            </div>
+
+            <!-- Grade de 12 Mini Barras Verticais (Threads) -->
+            <div class="pc-bloco-cores">
+              <div class="rotulo-secundario pc-cores-rotulo">Threads</div>
+              <div class="pc-grade-cores" id="pc-cpu-cores">
+                <!-- 12 mini barras verticais inseridas via JS -->
+              </div>
+            </div>
+
+            <!-- Top Processos -->
+            <div class="pc-bloco-processos">
+              <div class="rotulo-secundario pc-processos-cabecalho">
+                <span>Top Processos</span>
+                <span>CPU / RAM</span>
+              </div>
+              <div class="pc-lista-processos" id="pc-processos-lista">
+                <div class="linha-dado rotulo-secundario">Nenhum processo</div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <!-- Faixa de Baixo (Rodapé da Tela PC) -->
+        <footer class="pc-faixa-baixo">
+          <div class="pc-faixa-item" id="pc-faixa-ram">RAM: — / — GB (—%)</div>
+          <span class="separador">·</span>
+          <div class="pc-faixa-item" id="pc-faixa-vram">VRAM: — / — GB (—%)</div>
+          <span class="separador">·</span>
+          <div class="pc-faixa-item" id="pc-faixa-swap">Swap: —%</div>
+          <span class="separador">·</span>
+          <div class="pc-faixa-item" id="pc-faixa-disco">Disco: L — · E — MB/s</div>
+          <span class="separador">·</span>
+          <div class="pc-faixa-item" id="pc-faixa-rede">Rede: ↓ — · ↑ —</div>
+          <span class="separador">·</span>
+          <div class="pc-faixa-item" id="pc-faixa-uptime">Uptime: —</div>
+        </footer>
+      </div>
+    </section>
+
+    <!-- Tela 3: Windows (Grade 4x3) -->
+    <section class="tela" id="tela-3">
+      <div class="grade-stream-deck" id="grade-stream-deck">
+        <!-- Botoes inseridos via JS (tela == 2) -->
+      </div>
+    </section>
+
+    <!-- Tela Mídia -->
+    <section class="tela" id="tela-midia">
+      <div class="midia-painel">
+        <div class="midia-cabecalho">
+          <div class="midia-chips" id="midia-chips" hidden></div>
+          <span class="midia-erro" id="midia-erro" hidden></span>
+        </div>
+
+        <div class="midia-corpo">
+          <div class="midia-vazio" id="midia-vazio">
+            <svg class="midia-icone-vazio" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            <span>Nada tocando</span>
+          </div>
+
+          <div class="midia-detalhe" id="midia-detalhe" hidden>
+            <div class="midia-col-capa">
+              <div class="midia-capa-moldura" id="midia-capa-moldura" role="button" tabindex="0" title="Trazer para a frente no PC" aria-label="Trazer o player para a frente no PC">
+                <img class="midia-capa-img" id="midia-capa-img" alt="Capa da mídia" hidden>
+                <div class="midia-capa-placeholder" id="midia-capa-placeholder">
+                  <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                </div>
+              </div>
+            </div>
+
+            <div class="midia-col-dados">
+              <div class="midia-meta">
+                <div class="midia-app" id="midia-app">—</div>
+                <div class="midia-titulo" id="midia-titulo">—</div>
+                <div class="midia-artista" id="midia-artista">—</div>
+              </div>
+
+              <div class="midia-progresso" id="midia-progresso">
+                <span class="midia-tempo" id="midia-tempo-atual">0:00</span>
+                <div class="midia-barra-progresso" id="midia-barra-progresso" role="slider" aria-label="Progresso da mídia">
+                  <div class="midia-progresso-trilho">
+                    <div class="midia-progresso-preench" id="midia-progresso-preench"></div>
+                  </div>
+                </div>
+                <span class="midia-tempo" id="midia-tempo-total">0:00</span>
+              </div>
+
+              <div class="midia-controles">
+                <button type="button" class="midia-btn midia-btn-sec" id="midia-btn-anterior" title="Anterior" aria-label="Anterior">
+                  <svg viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+                </button>
+                <button type="button" class="midia-btn midia-btn-sec midia-btn-pular" id="midia-btn-voltar" title="Voltar" aria-label="Voltar">
+                  <svg viewBox="0 0 24 24" class="midia-ic-pular"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                  <span class="midia-pular-rotulo" id="midia-voltar-rotulo">10</span>
+                </button>
+                <button type="button" class="midia-btn midia-btn-play" id="midia-btn-play" title="Play / Pause" aria-label="Play ou Pause">
+                  <svg class="midia-ic-play" viewBox="0 0 24 24"><polygon points="6 4 19 12 6 20 6 4"/></svg>
+                  <svg class="midia-ic-pause" viewBox="0 0 24 24" hidden><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                </button>
+                <button type="button" class="midia-btn midia-btn-sec midia-btn-pular" id="midia-btn-avancar" title="Avançar" aria-label="Avançar">
+                  <svg viewBox="0 0 24 24" class="midia-ic-pular"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  <span class="midia-pular-rotulo" id="midia-avancar-rotulo">10</span>
+                </button>
+                <button type="button" class="midia-btn midia-btn-sec" id="midia-btn-proxima" title="Próxima" aria-label="Próxima">
+                  <svg viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="midia-rodape-volume" id="midia-rodape-volume">
+          <button type="button" class="midia-btn-mudo" id="midia-btn-mudo" title="Mudo" aria-label="Alternar mudo">
+            <svg class="midia-ic-som" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+            <svg class="midia-ic-mudo" viewBox="0 0 24 24" hidden><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+          </button>
+          <div class="midia-volume-slider-caixa">
+            <input type="range" class="midia-volume-slider" id="midia-volume-slider" min="0" max="100" value="0" aria-label="Volume">
+          </div>
+          <span class="midia-volume-valor" id="midia-volume-valor">0%</span>
+          <button type="button" class="midia-btn-vel" id="midia-btn-vel" title="Velocidade" aria-label="Velocidade" aria-haspopup="true" aria-expanded="false" hidden>1x</button>
+          <div class="midia-vel-menu" id="midia-vel-menu" role="menu" hidden>
+            <button type="button" role="menuitemradio" data-vel="0.25">0,25x</button>
+            <button type="button" role="menuitemradio" data-vel="0.5">0,5x</button>
+            <button type="button" role="menuitemradio" data-vel="0.75">0,75x</button>
+            <button type="button" role="menuitemradio" data-vel="1">1x</button>
+            <button type="button" role="menuitemradio" data-vel="1.25">1,25x</button>
+            <button type="button" role="menuitemradio" data-vel="1.5">1,5x</button>
+            <button type="button" role="menuitemradio" data-vel="1.75">1,75x</button>
+            <button type="button" role="menuitemradio" data-vel="2">2x</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tela Apps (Grade 4x3) -->
+    <section class="tela" id="tela-apps">
+      <div class="grade-stream-deck" id="grade-apps">
+        <!-- Botoes inseridos via JS (tela == 4) -->
+      </div>
+    </section>
+
+    <!-- Tela 4: Modelos e Celular -->
+    <section class="tela" id="tela-4">
+      <div class="layout-tela-3">
+        <!-- Botoes de acao tela 3 no topo -->
+        <div class="topo-acoes-tela-3" id="topo-acoes-tela-3">
+          <!-- Botoes tela 3 inseridos via JS -->
+        </div>
+
+        <div class="conteudo-tela-3">
+          <!-- Tabela historico omniroute -->
+          <div class="painel-historico">
+            <div class="subtitulo">Últimas 10 Chamadas OmniRoute</div>
+            <div class="tabela-scroll">
+              <table class="tabela-chamadas">
+                <thead>
+                  <tr>
+                    <th>Hora</th>
+                    <th>Provedor</th>
+                    <th>Modelo</th>
+                    <th>Tokens</th>
+                    <th>Custo</th>
+                  </tr>
+                </thead>
+                <tbody id="corpo-tabela-historico">
+                  <tr>
+                    <td colspan="5" class="linha-sem-dados">Nenhum registro</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Bloco Galaxy S10+ -->
+          <div class="painel-celular">
+            <div class="quad-cabecalho">
+              <span class="quad-titulo">GALAXY S10+</span>
+              <span class="indicador-erro" id="erro-celular"></span>
+            </div>
+            <div class="metricas-celular">
+              <div class="celular-item">
+                <span class="rotulo-secundario">Bateria:</span>
+                <span class="celular-valor" id="s10-bateria">—%</span>
+              </div>
+              <div class="celular-item">
+                <span class="rotulo-secundario">Temperatura:</span>
+                <span class="celular-valor" id="s10-temp">—°C</span>
+              </div>
+              <div class="celular-item">
+                <span class="rotulo-secundario">Carregando:</span>
+                <span class="celular-valor" id="s10-carregando">—</span>
+              </div>
+            </div>
+            <div class="aviso-protecao-bateria">Proteger bateria: 85% (One UI)</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tela 5: Energia -->
+    <section class="tela" id="tela-energia">
+      <div class="energia-tela-conteudo">
+        <div class="energia-alvo">
+          <button class="energia-botao" id="energia-botao" type="button" aria-label="Ação de energia">
+            <svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.4 6.9a8 8 0 1 0 11.2 0"/></svg>
+          </button>
+          <div class="energia-pontos" id="energia-pontos">
+            <span class="energia-ponto ativo"></span>
+            <span class="energia-ponto"></span>
+            <span class="energia-ponto"></span>
+            <span class="energia-ponto"></span>
+          </div>
+        </div>
+        <div class="energia-textos">
+          <div class="energia-nome" id="energia-nome">Suspender</div>
+          <div class="energia-desc" id="energia-desc">toque para suspender · arraste ↕ para mais</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Portao em X: fecha o painel enquanto o PC nao esta desbloqueado e conectado (ou desligado no botao).
+       Botao "Ligar" (PC fora) ou "Desbloquear" (tela de bloqueio): o toque abre o app de digital. -->
+  <div class="portao fechado procurando" id="portao">
+    <div class="porta porta-cima"></div>
+    <div class="porta porta-baixo"></div>
+    <div class="porta porta-esq"></div>
+    <div class="porta porta-dir"></div>
+    <svg class="portao-x" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <line x1="0" y1="0" x2="100" y2="100"/><line x1="100" y1="0" x2="0" y2="100"/>
+    </svg>
+    <div class="portao-centro">
+      <button class="botao-power" id="botao-power" aria-label="Ligar painel">
+        <svg class="ic-power" viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.4 6.9a8 8 0 1 0 11.2 0"/></svg>
+        <svg class="ic-digital" viewBox="0 0 24 24"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>
+        <span class="power-rotulo" id="power-rotulo">···</span>
+      </button>
+      <div class="portao-status" id="portao-status">Procurando o PC…</div>
+      <div class="portao-dica" id="portao-dica">ligue o PC: o painel conecta sozinho</div>
+      <!-- PC ligando/acordando/reiniciando: 100% = Windows ligado e painel conectado -->
+      <div class="boot" id="boot">
+        <div class="boot-trilho"><div class="boot-barra" id="boot-barra"></div></div>
+        <div class="boot-pct" id="boot-pct">0%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PC desbloqueado com o video apagado: tocar acende o monitor (mesmo desenho da tela de bloqueio) -->
+  <div class="tela-bloqueio tela-video" id="tela-video" data-estado="normal">
+    <button class="botao-digital" id="botao-video" type="button" aria-label="Acender o monitor do PC">
+      <svg class="icone-digital" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+      <svg class="icone-ok" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+    </button>
+    <div class="energia-textos">
+      <div class="energia-nome">Vídeo desligado</div>
+      <div class="energia-desc">toque para acender o monitor</div>
+    </div>
+  </div>
+
+  <!-- Seletor do app da tecla livre (segurar a tecla) -->
+  <div class="seletor-app" id="seletor-app" hidden>
+    <div class="seletor-caixa">
+      <div class="seletor-topo">
+        <span class="quad-titulo">ESCOLHER APP</span>
+        <input class="seletor-busca" id="seletor-busca" type="search" placeholder="buscar…" autocomplete="off">
+        <button class="seletor-fechar" id="seletor-fechar" aria-label="Fechar">✕</button>
+      </div>
+      <div class="seletor-lista" id="seletor-lista"></div>
+    </div>
+  </div>
+
+  <!-- Toast Discreto no Rodape -->
+  <div class="toast-alerta" id="toast-alerta"></div>
+
+  <!-- Overlay Preto Apagar Tela -->
+  <div class="overlay-apagar-tela" id="overlay-apagar-tela"></div>
+
+  <script src="/static/app.js?v=25"></script>
+</body>
+</html>
