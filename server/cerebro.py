@@ -69,6 +69,18 @@ def rotas(autorizado, token, cfg: dict | None = None) -> APIRouter:
         modo = str(dados.get("modo") or "local")
         if modo not in ("local", "local2", "claude", "agy"):
             modo = "local"
+        # "abre o Discord", "pausa a música": o painel faz na hora (so programas do Menu Iniciar)
+        import asyncio
+        from . import comandos
+        from .collectors import midia
+        pedido = comandos.interpretar(texto)
+        if pedido and pedido["tipo"] == "abrir":
+            res = await asyncio.to_thread(comandos.abrir, pedido["alvo"])
+            if res.get("resposta"):
+                return {"resposta": res["resposta"], "modo": "comando"}
+        elif pedido and pedido["tipo"] == "midia":
+            res = await asyncio.to_thread(midia.comando, cfg, pedido["cmd"], None, None)
+            return {"resposta": pedido["resposta"] if res.get("ok") else "Não tem nada tocando agora.", "modo": "comando"}
         return await repassar("POST", "/falar", {"texto": texto, "modo": modo}, timeout=240)
 
     @r.post("/vendel/ouvir")

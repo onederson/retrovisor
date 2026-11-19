@@ -137,6 +137,7 @@ class Ouvido:
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=SEM_JANELA)
             lido, falou, quieto_desde, inicio_ouvir = CABECALHO_SCRCPY, False, None, None
             fundo: list[float] = []  # barulho do ambiente nos primeiros 500 ms
+            recentes: list[bool] = []  # fala/nao-fala dos ultimos 1,5 s (chiado solto nao segura a escuta)
             while True:
                 if self._parar.is_set() or PRIVACIDADE["mudo"]:
                     break
@@ -161,12 +162,13 @@ class Ouvido:
                         fundo.append(nivel)
                         continue
                     limite = max(FALA_RMS, 3 * sorted(fundo)[len(fundo) // 2])
-                    if nivel > limite:
-                        falou, quieto_desde = True, None
-                    elif falou and quieto_desde is None:
-                        quieto_desde = time.time()
+                    fala = nivel > limite
+                    recentes = (recentes + [fala])[-15:]
+                    if fala and sum(recentes[-3:]) >= 2:  # 2 de 3 blocos: fala de verdade, nao estalo
+                        falou = True
                 agora = time.time()
-                if falou and quieto_desde and agora - quieto_desde > SILENCIO_FIM_S:
+                # terminou: ja falou e, no ultimo 1,4 s, no maximo 2 blocos soltos acima do limite
+                if falou and len(recentes) >= 14 and sum(recentes[-14:]) <= 2:
                     break
                 if agora - inicio_ouvir > MAX_FALA_S or (not falou and agora - inicio_ouvir > SEM_FALA_DESISTE_S):
                     break
@@ -225,6 +227,28 @@ def limpar_sobras() -> None:
 OUVIDO = Ouvido()
 
 
+# Giro da foto da camera da frente conforme a rotacao da tela do celular (SurfaceOrientation do Android).
+# Medido em 2026-11-19 no S10+ deitado do jeito do painel (rotacao 3): so 180 graus deixou a foto em pe
+# (conferido pelo gemma4 local, sem ninguem ver a foto). 1 e o lado oposto; retrato e estimativa.
+GIRO_POR_ROTACAO = {3: 180, 1: 0, 0: 270, 2: 90}
+
+
+def _giro_camera(cfg: dict) -> int:
+    fixo = (cfg.get("vendel") or {}).get("camera_giro")
+    if fixo is not None:
+        return int(fixo)
+    try:
+        adb = (cfg.get("caminhos") or {}).get("adb") or "adb"
+        r = subprocess.run([adb, "-s", _serial(cfg), "shell", "dumpsys input"], capture_output=True, text=True,
+                           timeout=10, creationflags=SEM_JANELA, errors="replace")
+        for linha in r.stdout.splitlines():
+            if "SurfaceOrientation:" in linha:
+                return GIRO_POR_ROTACAO.get(int(linha.split(":")[1].strip()), 0)
+    except Exception:
+        pass
+    return 180
+
+
 def foto(cfg: dict) -> bytes:
     """Um quadro da camera da frente (JPEG). Levanta PermissionError se 'cego' estiver ligado."""
     if PRIVACIDADE["cego"]:
@@ -238,9 +262,11 @@ def foto(cfg: dict) -> bytes:
                         "--camera-size=1280x720", "--no-audio", "--no-playback", "--record=cam.mkv",
                         "--time-limit=2"], cwd=pasta, env=_env(cfg), timeout=40, creationflags=SEM_JANELA,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        giro = _giro_camera(cfg)
+        filtro = {90: ["-vf", "transpose=1"], 180: ["-vf", "transpose=1,transpose=1"], 270: ["-vf", "transpose=2"]}
         subprocess.run(["ffmpeg", "-loglevel", "error", "-sseof", "-0.3", "-i", "cam.mkv", "-frames:v", "1",
-                        "-q:v", "4", "cam.jpg"], cwd=pasta, timeout=30, creationflags=SEM_JANELA,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        *filtro.get(giro, []), "-q:v", "4", "cam.jpg"], cwd=pasta, timeout=30,
+                       creationflags=SEM_JANELA, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         jpg = pasta / "cam.jpg"
         if not jpg.exists():
             raise RuntimeError("a camera do celular nao abriu")
