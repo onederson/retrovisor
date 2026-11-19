@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
   <title>Painel S10+ OLED</title>
-  <link rel="stylesheet" href="/static/style.css?v=22">
+  <link rel="stylesheet" href="/static/style.css?v=26">
   <link rel="manifest" href="/static/manifest.json?v=14">
   <meta name="theme-color" content="#000000">
   <link rel="icon" href="/static/icone-192.png">
@@ -466,44 +466,60 @@
     <!-- Tela 8: Vendel. Um bichinho por janela do Claude Code (web/vendel.js, dados de server/mini.py).
          Sem toque por 2 min, o painel vem sozinho para ca. -->
     <section class="tela tela-vendel" id="tela-vendel">
-      <canvas class="vendel-canvas" aria-label="Vendel"></canvas>
-      <div class="vendel-camada">
-        <div class="vendel-resumo"></div>
-        <div class="vendel-hora"></div>
-        <div class="vendel-rotulos"></div>
+      <!-- Palco: o Vendel e os textos. A direita, a coluna de botoes (sempre no mesmo lugar). -->
+      <div class="vendel-palco">
+        <canvas class="vendel-canvas" aria-label="Vendel"></canvas>
+        <div class="vendel-camada">
+          <div class="vendel-resumo"></div>
+          <div class="vendel-hora"></div>
+          <div class="vendel-rotulos"></div>
+        </div>
+        <div class="vendel-fala" hidden></div>
+        <div class="vendel-pergunta vendel-controle" hidden>
+          <p class="vendel-pergunta-texto"></p>
+          <div><button type="button" class="vendel-responder">Responder falando</button><button type="button" class="vendel-depois">Depois</button></div>
+        </div>
+        <div class="vendel-digitar vendel-controle" hidden>
+          <form><input type="text" id="vendel-texto" placeholder="Escreva para o Vendel…" autocomplete="off" enterkeyhint="send">
+            <button type="submit">Enviar</button><button type="button" class="vendel-cancelar" aria-label="Fechar">✕</button></form>
+        </div>
+        <div class="vendel-painel vendel-controle" hidden></div>
       </div>
-      <div class="vendel-ajustes vendel-controle">
-        <button type="button" class="vendel-forma" title="Megabrain: toque para transformar"></button>
-        <button type="button" class="vendel-voz"></button>
-        <button type="button" class="vendel-silencio"></button>
-      </div>
-      <!-- Privacidade: sempre a mostra. Mudo = microfone desligado; cego = camera desligada. -->
-      <div class="vendel-privacidade vendel-controle">
-        <button type="button" class="vendel-mudo" aria-label="Mudo: desligar o microfone">
-          <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/><path class="risco" d="M4 4l16 16"/></svg>
-          <span>mudo</span>
+
+      <nav class="vendel-dock vendel-controle" aria-label="Botões do Vendel">
+        <button type="button" class="vd-botao vd-principal vendel-mic" aria-label="Falar com o Vendel">
+          <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+          <span class="vd-nome vendel-mic-nome">Falar</span>
         </button>
-        <button type="button" class="vendel-cego" aria-label="Cego: desligar a câmera">
-          <svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="risco" d="M4 4l16 16"/></svg>
-          <span>cego</span>
+        <button type="button" class="vd-botao vendel-ver" aria-label="Mostrar algo para a câmera">
+          <svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          <span class="vd-nome">Mostrar</span>
         </button>
-      </div>
-      <button type="button" class="vendel-ver vendel-controle" aria-label="Mostrar algo para o Vendel">
-        <svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
-      </button>
-      <button type="button" class="vendel-mic vendel-controle" aria-label="Falar com o Vendel">
-        <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
-      </button>
-      <div class="vendel-fala" hidden></div>
-      <div class="vendel-pergunta vendel-controle" hidden>
-        <p class="vendel-pergunta-texto"></p>
-        <div><button type="button" class="vendel-responder">Responder</button><button type="button" class="vendel-depois">Depois</button></div>
-      </div>
-      <div class="vendel-digitar vendel-controle" hidden>
-        <form><input type="text" id="vendel-texto" placeholder="Escreva para o Vendel…" autocomplete="off" enterkeyhint="send">
-          <button type="submit">Enviar</button><button type="button" class="vendel-cancelar">✕</button></form>
-      </div>
-      <div class="vendel-painel vendel-controle" hidden></div>
+        <div class="vd-par">
+          <button type="button" class="vd-botao vd-chave vendel-mudo" aria-label="Mudo: desligar o microfone">
+            <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/><path class="risco" d="M4 4l16 16"/></svg>
+            <span class="vd-nome">Mudo</span>
+          </button>
+          <button type="button" class="vd-botao vd-chave vendel-cego" aria-label="Cego: desligar a câmera">
+            <svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="risco" d="M4 4l16 16"/></svg>
+            <span class="vd-nome">Cego</span>
+          </button>
+        </div>
+        <button type="button" class="vd-botao vd-forma vendel-forma" aria-label="Megabrain: toque para transformar">
+          <span class="vd-rotulo">cérebro</span><span class="vd-pontos"><i></i><i></i><i></i><i></i></span>
+          <span class="vd-nome vendel-forma-nome">Base</span>
+        </button>
+        <div class="vd-par">
+          <button type="button" class="vd-botao vd-chave vd-pequeno vendel-voz" aria-label="Voz do Vendel">
+            <svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="onda" d="M16 9a4 4 0 0 1 0 6"/><path class="risco" d="M4 4l16 16"/></svg>
+            <span class="vd-nome">Voz</span>
+          </button>
+          <button type="button" class="vd-botao vd-chave vd-pequeno vendel-silencio" aria-label="Não perturbe">
+            <svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
+            <span class="vd-nome">Silêncio</span>
+          </button>
+        </div>
+      </nav>
     </section>
   </main>
 
@@ -567,6 +583,6 @@
   <div class="overlay-apagar-tela" id="overlay-apagar-tela"></div>
 
   <script src="/static/app.js?v=26"></script>
-  <script src="/static/vendel.js?v=4"></script>
+  <script src="/static/vendel.js?v=5"></script>
 </body>
 </html>

@@ -2288,40 +2288,6 @@ html, body {
 }
 
 /* ===== Vendel: conversa, perguntas, ajustes e resumo do dia ===== */
-.vendel-ajustes {
-  position: absolute;
-  top: 32px;
-  right: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-}
-.vendel-ajustes button {
-  background: transparent;
-  border: 0;
-  padding: 2px 4px;
-  font: inherit;
-  font-size: 11px;
-  color: #2f4a39;
-  cursor: pointer;
-}
-.vendel-ajustes button[aria-pressed="true"].vendel-silencio { color: var(--ambar); }
-.vendel-mic {
-  position: absolute;
-  right: 14px;
-  bottom: 50px;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: #030603;
-  border: 1px solid var(--verde-escuro);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-.vendel-mic svg { width: 22px; height: 22px; fill: none; stroke: var(--verde-2); stroke-width: 1.8; stroke-linecap: round; }
-.vendel-mic:active { background: var(--verde-escuro); }
 .vendel-fala {
   position: absolute;
   top: 30px;
@@ -2411,53 +2377,85 @@ html, body {
 .vendel-barra em { font-style: normal; color: var(--texto-3); text-align: right; font-variant-numeric: tabular-nums; }
 .vendel-painel-motivo { margin: 0; color: var(--texto-3); font-size: 12px; }
 
-/* ===== Vendel: privacidade (mudo/cego), foto e formas ===== */
-.vendel-privacidade {
-  position: absolute;
-  left: 12px;
-  bottom: 50px;
+
+
+/* ===== Vendel: pagina nova (palco + coluna de botoes grandes a direita) ===== */
+.tela.tela-vendel { display: grid; grid-template-columns: 1fr 132px; }
+.vendel-palco { position: relative; min-width: 0; height: 100%; overflow: hidden; }
+.vendel-dock {
   display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: stretch;
   gap: 8px;
+  padding: 10px 10px 12px;
+  border-left: 1px solid #0d2414;
+  background: #000;
 }
-.vendel-privacidade button {
+.vd-par { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.vd-botao {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  background: #030603;
-  border: 1px solid var(--verde-escuro);
-  border-radius: 12px;
-  padding: 6px 8px 4px;
-  color: var(--texto-3);
+  justify-content: center;
+  gap: 4px;
+  min-height: 64px;
+  padding: 8px 4px;
+  border-radius: 18px;
+  background: #031007;
+  border: 1.5px solid #14522a;
+  color: var(--texto-2);
   font: inherit;
-  font-size: 10px;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.08s ease, background 0.2s ease, border-color 0.2s ease;
 }
-.vendel-privacidade svg, .vendel-ver svg {
-  width: 20px; height: 20px; fill: none; stroke: var(--texto-3); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
-}
-.vendel-privacidade .risco { display: none; }
-.vendel-privacidade button[aria-pressed="true"] { border-color: var(--ambar); color: var(--ambar); }
-.vendel-privacidade button[aria-pressed="true"] svg { stroke: var(--ambar); }
-.vendel-privacidade button[aria-pressed="true"] .risco { display: inline; }
-.vendel-ver {
-  position: absolute;
-  right: 70px;
-  bottom: 54px;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: #030603;
-  border: 1px solid var(--verde-escuro);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-.tela-vendel.cego .vendel-ver { opacity: 0.35; }
-.tela-vendel.mudo .vendel-mic svg { stroke: var(--texto-3); }
-.vendel-forma[data-forma="1"] { color: var(--verde-2) !important; }
-.vendel-forma[data-forma="2"] { color: var(--verde) !important; }
-.vendel-forma[data-forma="3"] { color: #FFD54A !important; text-shadow: 0 0 8px rgba(255, 201, 60, 0.6); }
-
-/* ajustes do Vendel no canto de cima a esquerda (no canto direito o balao de pensamento cobria) */
-.vendel-ajustes { top: 30px; left: 10px; right: auto; flex-direction: row; align-items: center; gap: 10px; }
+.vd-botao:active { transform: scale(0.94); background: #0b2a16; }
+.vd-botao:focus-visible { outline: 2px solid var(--verde); outline-offset: 2px; }
+.vd-botao svg { width: 28px; height: 28px; fill: none; stroke: var(--verde-2); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.vd-nome { font-size: 13px; font-weight: 600; letter-spacing: 0.2px; line-height: 1.1; text-align: center; }
+.vd-pequeno { min-height: 54px; }
+.vd-pequeno svg { width: 22px; height: 22px; }
+.vd-pequeno .vd-nome { font-size: 11px; }
+.vd-principal { min-height: 112px; border-radius: 26px; background: #06210f; border-color: var(--verde-2); }
+.vd-principal svg { width: 44px; height: 44px; stroke: var(--verde); stroke-width: 2; }
+.vd-principal .vd-nome { font-size: 16px; color: var(--verde); }
+.tela-vendel.ouvindo .vd-principal { background: #0b3a1b; border-color: var(--verde); animation: vd-pulso 1s ease-in-out infinite; }
+.tela-vendel.pensando .vd-principal { border-style: dashed; }
+@keyframes vd-pulso { 0%, 100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); } 50% { box-shadow: 0 0 22px 4px rgba(0, 230, 118, 0.45); } }
+/* chaves: ligada = ambar (mudo, cego, silencio) */
+.vd-chave .risco { display: none; }
+.vd-chave[aria-pressed="true"] { border-color: var(--ambar); background: #1d1400; color: var(--ambar); }
+.vd-chave[aria-pressed="true"] svg { stroke: var(--ambar); }
+.vendel-mudo[aria-pressed="true"] .risco, .vendel-cego[aria-pressed="true"] .risco { display: inline; }
+/* voz: ligada = normal; desligada = ambar com risco */
+.vendel-voz[aria-pressed="true"] { border-color: #14522a; background: #031007; color: var(--texto-2); }
+.vendel-voz[aria-pressed="true"] svg { stroke: var(--verde-2); }
+.vendel-voz[aria-pressed="false"] { border-color: var(--ambar); background: #1d1400; color: var(--ambar); }
+.vendel-voz[aria-pressed="false"] svg { stroke: var(--ambar); }
+.vendel-voz[aria-pressed="false"] .risco { display: inline; }
+.vendel-voz[aria-pressed="false"] .onda { display: none; }
+.tela-vendel.cego .vendel-ver { opacity: 0.4; }
+/* forma do Megabrain: 4 pontinhos que acendem; dourado na suprema */
+.vd-forma { min-height: 58px; }
+.vd-pontos { display: flex; gap: 5px; }
+.vd-pontos i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid #14522a; }
+.vd-forma[data-forma="0"] .vd-pontos i:nth-child(-n+1),
+.vd-forma[data-forma="1"] .vd-pontos i:nth-child(-n+2),
+.vd-forma[data-forma="2"] .vd-pontos i:nth-child(-n+3) { background: var(--verde); border-color: var(--verde); }
+.vd-forma[data-forma="2"] .vd-nome { color: var(--verde); }
+.vd-forma[data-forma="3"] { border-color: #FFC93C; background: #1f1600; }
+.vd-forma[data-forma="3"] .vd-pontos i { background: #FFD54A; border-color: #FFD54A; }
+.vd-forma[data-forma="3"] .vd-nome { color: #FFD54A; text-shadow: 0 0 8px rgba(255, 201, 60, 0.6); }
+@media (prefers-reduced-motion: reduce) { .tela-vendel.ouvindo .vd-principal { animation: none; } }
+/* cabe na altura da tela do S10+ (~372 px): coluna compacta mas com alvos grandes */
+.tela.tela-vendel { grid-template-rows: minmax(0, 1fr); }
+.vendel-dock { gap: 6px; padding: 8px 8px 8px; min-height: 0; overflow: hidden; }
+.vd-par { gap: 6px; }
+.vd-botao { min-height: 54px; padding: 4px; border-radius: 16px; }
+.vd-principal { min-height: 100px; flex: 1 1 100px; max-height: 128px; border-radius: 24px; }
+.vd-forma { min-height: 50px; }
+.vd-pequeno { min-height: 46px; }
+.vd-forma { gap: 2px; }
+.vd-rotulo { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--texto-3); }

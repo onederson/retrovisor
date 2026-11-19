@@ -47,7 +47,7 @@
   // ---------- grade de pixels ----------
   let W = 0, H = 0, escala = 6, base = 30;
   function dimensionar() {
-    const r = secao.getBoundingClientRect();
+    const r = (secao.querySelector('.vendel-palco') || secao).getBoundingClientRect();
     if (!r.width || !r.height) return false;
     escala = Math.max(3, Math.floor(r.height / 52)); // ~52 px de altura: o Vendel ocupa metade da tela
     W = Math.floor(r.width / escala);
@@ -469,10 +469,10 @@
   // Formas do Megabrain: base (Ollama pequeno) -> 2 (Ollama grande) -> 3 (agy, nuvem) -> suprema (Claude, nuvem).
   // Cansa: 10 min sem conversa numa forma alta e ele volta sozinho para a base.
   const FORMAS = [
-    { modo: 'local', nome: 'forma: base' },
-    { modo: 'local2', nome: 'forma 2' },
-    { modo: 'agy', nome: 'forma 3 · nuvem' },
-    { modo: 'claude', nome: 'forma suprema · Claude' }
+    { modo: 'local', nome: 'Base', curto: 'Base' },
+    { modo: 'local2', nome: 'Forma 2', curto: 'Forma 2' },
+    { modo: 'agy', nome: 'Forma 3 (nuvem)', curto: 'Forma 3' },
+    { modo: 'claude', nome: 'Forma suprema (Claude)', curto: 'Suprema' }
   ];
   let forma = Math.min(3, Math.max(0, Number(guardado('vendel_forma', '0')) || 0));
   let formaUsoEm = Date.now();
@@ -699,10 +699,16 @@
   // ---------- botoes ----------
   function desenharBotoes() {
     const b = (cls) => secao.querySelector(cls);
-    const marcar = (el, sim, txt) => { if (!el) return; el.setAttribute('aria-pressed', String(sim)); if (txt != null) el.textContent = txt; };
-    if (b('.vendel-forma')) { b('.vendel-forma').textContent = FORMAS[forma].nome; b('.vendel-forma').dataset.forma = String(forma); }
-    marcar(b('.vendel-voz'), vozLigada, vozLigada ? 'voz: ligada' : 'voz: desligada');
-    marcar(b('.vendel-silencio'), silencio, silencio ? 'não perturbe: sim' : 'não perturbe: não');
+    const marcar = (el, sim) => { if (el) el.setAttribute('aria-pressed', String(sim)); };
+    const f = b('.vendel-forma');
+    if (f) {
+      f.dataset.forma = String(forma);
+      f.setAttribute('aria-label', `Megabrain: ${FORMAS[forma].nome}. Toque para transformar`);
+      const nome = f.querySelector('.vendel-forma-nome');
+      if (nome) nome.textContent = FORMAS[forma].curto;
+    }
+    marcar(b('.vendel-voz'), vozLigada);
+    marcar(b('.vendel-silencio'), silencio);
     marcar(b('.vendel-mudo'), mudo);
     marcar(b('.vendel-cego'), cego);
     secao.classList.toggle('mudo', mudo);
@@ -739,7 +745,8 @@
     transformandoAte = Date.now() + 1600;
     guardar('vendel_forma', String(forma)); desenharBotoes();
     vibrar(forma === 3 ? [40, 40, 40, 40, 120] : 30);
-    if (forma >= 2) mostrarFala('Nesta forma eu penso na nuvem: o pedacinho de memória da conversa sai do PC.', 5000);
+    if (forma >= 2) mostrarFala(`${FORMAS[forma].nome}: nesta forma eu penso na nuvem, e o pedacinho de memória da conversa sai do PC.`, 5000);
+    else mostrarFala(`${FORMAS[forma].nome}: eu penso aqui no seu PC.`, 3000);
   });
   clicar('.vendel-voz', () => { vozLigada = !vozLigada; guardar('vendel_voz', vozLigada ? '1' : '0'); desenharBotoes(); });
   clicar('.vendel-silencio', () => { silencio = !silencio; guardar('vendel_silencio', silencio ? '1' : '0'); desenharBotoes(); });
@@ -953,6 +960,13 @@
     }
     camada.style.transform = `translate(${ox * escala}px, ${oy * escala}px)`;
     secao.classList.toggle('noite', (madrugada || dormir) && !conversando);
+    const ouvindo = conversando && especial === 'ouvindo';
+    const pensando = conversando && (especial === 'pensandoVoz' || especial === 'perguntando');
+    secao.classList.toggle('ouvindo', ouvindo);
+    secao.classList.toggle('pensando', pensando && !ouvindo);
+    const nomeMic = secao.querySelector('.vendel-mic-nome');
+    const txtMic = ouvindo ? 'Ouvindo…' : (escutando ? 'Preparando…' : (pensando ? 'Pensando…' : (especial === 'falando' && conversando ? 'Falando…' : 'Falar')));
+    if (nomeMic && nomeMic.textContent !== txtMic) nomeMic.textContent = txtMic;
   }
 
   if ('IntersectionObserver' in window) {
