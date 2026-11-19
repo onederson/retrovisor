@@ -2458,3 +2458,6 @@ html, body {
 .vendel-forma[data-forma="1"] { color: var(--verde-2) !important; }
 .vendel-forma[data-forma="2"] { color: var(--verde) !important; }
 .vendel-forma[data-forma="3"] { color: #FFD54A !important; text-shadow: 0 0 8px rgba(255, 201, 60, 0.6); }
+
+/* ajustes do Vendel no canto de cima a esquerda (no canto direito o balao de pensamento cobria) */
+.vendel-ajustes { top: 30px; left: 10px; right: auto; flex-direction: row; align-items: center; gap: 10px; }

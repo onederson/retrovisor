@@ -44,8 +44,10 @@ def garantir_servico(cfg: dict) -> None:
         log.warning("cerebro do Vendel nao subiu: %s", e)
 
 
-def rotas(autorizado, token) -> APIRouter:
+def rotas(autorizado, token, cfg: dict | None = None) -> APIRouter:
+    from . import sentidos
     r = APIRouter()
+    cfg = cfg or {}
 
     def checar(req: Request) -> None:
         if not autorizado(req.client.host if req.client else None, token(req)):
@@ -118,6 +120,40 @@ def rotas(autorizado, token) -> APIRouter:
         dados = await req.json()
         return await repassar("POST", "/responder", {"id": str(dados.get("id") or "")[:20],
                                                       "texto": str(dados.get("texto") or "")[:2000]})
+
+    # Ouvido pelo microfone do celular (o PC liga pelo scrcpy; ver server/sentidos.py)
+    @r.post("/vendel/escutar/iniciar")
+    def escutar_iniciar(req: Request):
+        checar(req)
+        return sentidos.OUVIDO.iniciar(cfg, URL)
+
+    @r.get("/vendel/escutar/estado")
+    def escutar_estado(req: Request):
+        checar(req)
+        return sentidos.OUVIDO.info()
+
+    @r.post("/vendel/escutar/parar")
+    def escutar_parar(req: Request):
+        checar(req)
+        sentidos.OUVIDO.parar()
+        return {"ok": True}
+
+    @r.post("/vendel/olhar")
+    async def olhar(req: Request):
+        """Tira uma foto agora com a camera da frente do celular e pergunta ao cerebro. A foto nao e guardada."""
+        checar(req)
+        import asyncio
+        import base64
+        dados = await req.json()
+        try:
+            jpg = await asyncio.to_thread(sentidos.foto, cfg)
+        except PermissionError:
+            raise HTTPException(403, "cego ligado")
+        except Exception as e:
+            raise HTTPException(503, str(e)[:100])
+        pergunta = str(dados.get("pergunta") or "")[:500] or "O que você está vendo?"
+        return await repassar("POST", "/ver", {"imagem": base64.b64encode(jpg).decode(), "pergunta": pergunta},
+                              timeout=180)
 
     @r.get("/vendel/estado")
     async def estado(req: Request):

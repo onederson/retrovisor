@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import cerebro, config, humor
+from . import cerebro, config, humor, sentidos
 from .collectors import bloqueio, midia
 from .hub import Hub
 from .mini import Mini
@@ -235,6 +235,11 @@ async def ws(sock: WebSocket):
                 MINI.carinho()
             elif tipo == "toque":
                 MINI.toque()
+            elif tipo == "privacidade":  # botoes mudo/cego do Vendel: o servidor tambem se recusa
+                sentidos.PRIVACIDADE["mudo"] = bool(msg.get("mudo"))
+                sentidos.PRIVACIDADE["cego"] = bool(msg.get("cego"))
+                if sentidos.PRIVACIDADE["mudo"]:
+                    sentidos.OUVIDO.parar()
 
     leitor = asyncio.create_task(receber())
     try:
@@ -244,6 +249,7 @@ async def ws(sock: WebSocket):
             dados["energia"] = en["evento"]
             dados["energia_seq"] = en["seq"]
             dados["mini"] = MINI.snapshot()
+            dados["mini"]["pc_parado_s"] = sentidos.pc_parado_s()  # presenca: teclado/mouse do PC
             try:
                 dados["mini"]["humor"] = calcular_humor(dados["mini"], HUB.estado)
             except Exception:
@@ -261,5 +267,5 @@ async def ws(sock: WebSocket):
         leitor.cancel()
 
 
-app.include_router(cerebro.rotas(autorizado, _token))  # /vendel/*: conversa, voz, foto, perguntas
+app.include_router(cerebro.rotas(autorizado, _token, CFG))  # /vendel/*: conversa, voz, foto, perguntas
 app.mount("/static", StaticFiles(directory=WEB, check_dir=False), name="static")

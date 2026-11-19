@@ -398,7 +398,7 @@
     if (sit === 'lendo') olhoLupa(cx, cy, t, largo ? 12 : 5);
     if (sit === 'executando' || sit === 'trabalhando') engrenagem(cx + 16, cy + 1, t);
     if (sit === 'delegando') ajudante(cx, cy, t);
-    if (sit === 'pensando' || sit === 'pensandoVoz') balaoPensando(cx, cy, t, largo ? 'direita' : 'cima');
+    if (sit === 'pensando' || sit === 'pensandoVoz') balaoPensando(cx, cy, t, largo && cx + 28 < W ? 'direita' : 'cima');
     if (sit === 'precisa' && Math.floor(t * 2.5) % 3 !== 2) balaoSinal(cx, cy, '!');
     if (sit === 'perguntando') balaoSinal(cx, cy, '?');
     if (sit === 'ouvindo') ondasSom(cx, cy, t);
@@ -435,6 +435,7 @@
     resumo = mini.hoje || resumo;
     if (mini.humor) humor = mini.humor;
     if (mini.vida) vida = mini.vida;
+    if (typeof mini.pc_parado_s === "number") { pcParadoS = mini.pc_parado_s; pcParadoEm = Date.now(); }
     const agora = Date.now();
     const sessoes = mini.sessoes.slice(0, 20);
     const assin = sessoes.map((s) => s.id + ':' + s.estado).join('|');
@@ -498,113 +499,28 @@
   }
   const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  // ---------- camera: presenca (olhadinha a cada 10 s) e foto ----------
-  // Nenhuma imagem de presenca sai do celular: so compara dois quadrinhos 32x24 em tons de cinza.
-  let presenteAte = Date.now(), quadroAnterior = null, cameraFalhou = false, ultimoSinalPresenca = 0;
-  function presente() { return cego || cameraFalhou || Date.now() - Math.max(presenteAte, ultimoToque) < 240000; }
-  async function abrirCamera(w, h) {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: w }, height: { ideal: h } }, audio: false });
-    const v = document.createElement('video');
-    v.muted = true; v.playsInline = true; v.srcObject = stream;
-    await v.play();
-    return { stream, v };
+  // ---------- presenca: o dono mexeu no teclado/mouse do PC ha pouco (sem camera) ----------
+  let pcParadoS = 0, pcParadoEm = Date.now();
+  function presente() {
+    const pc = pcParadoS + (Date.now() - pcParadoEm) / 1000;
+    return pc < 240 || Date.now() - ultimoToque < 240000;
   }
-  const fecharCamera = (c) => { if (c) c.stream.getTracks().forEach((t) => t.stop()); };
-  function cinza(v) {
-    const c = document.createElement('canvas'); c.width = 32; c.height = 24;
-    const g = c.getContext('2d'); g.drawImage(v, 0, 0, 32, 24);
-    const d = g.getImageData(0, 0, 32, 24).data, out = new Uint8Array(32 * 24);
-    for (let i = 0; i < out.length; i++) out[i] = (d[i * 4] * 3 + d[i * 4 + 1] * 6 + d[i * 4 + 2]) / 10;
-    return out;
+  let ausenteDesde = null;
+  function conferirPresenca() {
+    if (presente()) {
+      if (ausenteDesde && Date.now() - ausenteDesde > 20 * 60000) {   // voltou depois de 20 min fora
+        const v = [...vendels.values()].find((x) => !x.morte);
+        if (v) v.carinhoAte = Date.now() + 1400;
+        ultimaMudanca = Date.now();
+        if (vozLigada && !silencio && !noite()) falarAlto('Oi! Que bom que você voltou.');
+      }
+      ausenteDesde = null;
+    } else if (!ausenteDesde) ausenteDesde = Date.now();
   }
-  const diferenca = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]); return s / a.length; };
-  async function olhadinha() {
-    if (cego || cameraFalhou || document.hidden || !navigator.mediaDevices) return;
-    let cam = null;
-    try {
-      cam = await abrirCamera(160, 120);
-      await espera(400);
-      const a = cinza(cam.v);
-      await espera(500);
-      const b = cinza(cam.v);
-      const mov = Math.max(diferenca(a, b), quadroAnterior ? diferenca(quadroAnterior, b) : 0);
-      quadroAnterior = b;
-      if (mov > 7) presencaDetectada();
-    } catch (e) {
-      cameraFalhou = true; // sem permissao ou sem camera: para de tentar
-    } finally { fecharCamera(cam); }
-  }
-  function presencaDetectada() {
-    const agora = Date.now();
-    const voltou = agora - Math.max(presenteAte, ultimoToque) > 20 * 60000;
-    presenteAte = agora;
-    if (agora - ultimoSinalPresenca > 60000) { ultimoSinalPresenca = agora; enviarWs({ tipo: 'toque' }); }
-    if (voltou) {
-      const v = [...vendels.values()].find((x) => !x.morte);
-      if (v) v.carinhoAte = agora + 1400;
-      ultimaMudanca = agora;
-      if (vozLigada && !silencio && !noite()) falarAlto('Oi! Que bom que você voltou.');
-    }
-  }
-  setInterval(olhadinha, 10000);
-  async function tirarFoto() {
-    const cam = await abrirCamera(640, 480);
-    try {
-      await espera(700);
-      const c = document.createElement('canvas');
-      c.width = cam.v.videoWidth || 640; c.height = cam.v.videoHeight || 480;
-      c.getContext('2d').drawImage(cam.v, 0, 0, c.width, c.height);
-      return c.toDataURL('image/jpeg', 0.75);
-    } finally { fecharCamera(cam); }
-  }
+  const enviarPrivacidade = () => enviarWs({ tipo: 'privacidade', mudo, cego });
+  setInterval(enviarPrivacidade, 20000);
+  setTimeout(enviarPrivacidade, 3000);
 
-  // ---------- microfone: grava WAV 16 kHz e o PC transcreve ----------
-  let gravacao = null;
-  function wav16k(partes, taxa) {
-    let total = 0; for (const p of partes) total += p.length;
-    const junto = new Float32Array(total); let o = 0;
-    for (const p of partes) { junto.set(p, o); o += p.length; }
-    const passo = taxa / 16000, n = Math.floor(total / passo);
-    const buf = new ArrayBuffer(44 + n * 2), dv = new DataView(buf);
-    const txt = (pos, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(pos + i, s.charCodeAt(i)); };
-    txt(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); txt(8, 'WAVE'); txt(12, 'fmt ');
-    dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
-    dv.setUint32(24, 16000, true); dv.setUint32(28, 32000, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
-    txt(36, 'data'); dv.setUint32(40, n * 2, true);
-    for (let i = 0; i < n; i++) {
-      const s = Math.max(-1, Math.min(1, junto[Math.floor(i * passo)]));
-      dv.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-    }
-    return new Blob([buf], { type: 'audio/wav' });
-  }
-  function pararGravacao() {
-    const g = gravacao;
-    if (!g) return;
-    gravacao = null;
-    try { g.proc.disconnect(); g.src.disconnect(); } catch (e) {}
-    g.stream.getTracks().forEach((t) => t.stop()); // o microfone fecha na hora
-    try { g.ac.close(); } catch (e) {}
-    g.fim(g.falou ? wav16k(g.partes, g.ac.sampleRate) : null);
-  }
-  async function gravar(fim) {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
-    const ac = new (window.AudioContext || window.webkitAudioContext)();
-    const src = ac.createMediaStreamSource(stream);
-    const proc = ac.createScriptProcessor(4096, 1, 1);
-    const g = { stream, ac, src, proc, partes: [], falou: false, fim };
-    const inicio = Date.now(); let quietoDesde = null;
-    proc.onaudioprocess = (e) => {
-      if (gravacao !== g) return;
-      const d = e.inputBuffer.getChannelData(0);
-      g.partes.push(new Float32Array(d));
-      let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i] * d[i];
-      const rms = Math.sqrt(s / (d.length / 4));
-      if (rms > 0.02) { g.falou = true; quietoDesde = null; } else if (g.falou && !quietoDesde) quietoDesde = Date.now();
-      if ((g.falou && quietoDesde && Date.now() - quietoDesde > 1400) || Date.now() - inicio > 15000) pararGravacao();
-    };
-    src.connect(proc); proc.connect(ac.destination);
-    gravacao = g;
-  }
   let falaAte = 0;
   function mostrarFala(texto, ms) {
     if (!falaEl) return;
@@ -666,33 +582,38 @@
     } catch (e) {}
   }
 
-  // ---------- conversa (microfone) ----------
+  // ---------- conversa (microfone do celular, ligado pelo PC so durante a escuta) ----------
   // vazioOk: sem fala, chama depois('') (ex.: foto sem pergunta = "o que voce esta vendo?")
+  let escutando = false;
   async function ouvir(depois, vazioOk) {
-    if (gravacao) { pararGravacao(); return; }       // segundo toque no microfone = terminei de falar
-    if (mudo || !navigator.mediaDevices) { pedirTexto(depois); return; }
+    if (escutando) { fetch(urlPainel('/vendel/escutar/parar'), { method: 'POST' }).catch(() => {}); return; }
+    if (mudo) { pedirTexto(depois); return; }
+    escutando = true;
+    mostrarFala('Preparando o ouvido…', 30000);
+    marcarEspecial('pensandoVoz', 30000);
     try {
-      await gravar(async (wav) => {
-        if (especial === 'ouvindo') marcarEspecial(null);
-        if (!wav) { if (vazioOk) depois(''); else mostrarFala('Não ouvi nada.', 3000); return; }
-        marcarEspecial('pensandoVoz', 120000);
-        mostrarFala('…', 120000);
-        try {
-          const r = await fetch(urlPainel('/vendel/ouvir'), { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
-          const d = await r.json();
-          marcarEspecial(null);
-          if (d && d.texto) depois(d.texto);
-          else if (vazioOk) depois('');
-          else mostrarFala('Não entendi. Toque no microfone e fale de novo.', 4000);
-        } catch (e) { marcarEspecial(null); mostrarFala('Meu cérebro está desligado agora.', 5000); }
-      });
-      marcarEspecial('ouvindo', 16000);
-      mostrarFala('Pode falar…', 16000);
-    } catch (e) {
+      const r = await (await fetch(urlPainel('/vendel/escutar/iniciar'), { method: 'POST' })).json();
+      if (!r.ok) throw new Error(r.erro || 'sem microfone');
+      const limite = Date.now() + 90000;
+      let anterior = '';
+      while (Date.now() < limite) {
+        await espera(300);
+        const e = await (await fetch(urlPainel('/vendel/escutar/estado'))).json();
+        if (e.estado !== anterior) {
+          anterior = e.estado;
+          if (e.estado === 'ouvindo') { marcarEspecial('ouvindo', 20000); mostrarFala('Pode falar…', 20000); vibrar(20); }
+          if (e.estado === 'transcrevendo') { marcarEspecial('pensandoVoz', 60000); mostrarFala('…', 60000); }
+        }
+        if (e.estado === 'pronto') { marcarEspecial(null); depois(e.texto); return; }
+        if (e.estado === 'nada') { marcarEspecial(null); if (vazioOk) depois(''); else mostrarFala('Não ouvi nada.', 3000); return; }
+        if (e.estado === 'erro') throw new Error(e.erro || 'erro');
+      }
+      throw new Error('demorou demais');
+    } catch (err) {
       marcarEspecial(null);
-      mostrarFala('Sem acesso ao microfone. Pode escrever.', 3000);
+      mostrarFala('Não consegui abrir o microfone do celular. Pode escrever.', 4000);
       pedirTexto(depois);
-    }
+    } finally { escutando = false; }
   }
   let aoDigitar = null;
   function pedirTexto(depois) {
@@ -795,20 +716,17 @@
   });
   clicar('.vendel-ver', async () => {
     if (cego) { mostrarFala('Estou de olhos vendados. Tire a venda no botão do olho.', 4000); return; }
-    let foto;
-    try { foto = await tirarFoto(); } catch (e) { mostrarFala('Não consegui abrir a câmera.', 4000); return; }
-    mostrarFala('Tirei a foto. O que você quer saber?', 16000);
+    // primeiro a pergunta, depois a foto: da tempo de colocar a coisa na frente da camera
     ouvir(async (pergunta) => {
       marcarEspecial('pensandoVoz', 180000);
-      mostrarFala('Olhando…', 180000);
+      mostrarFala('Segura na frente da câmera… olhando…', 180000);
       try {
-        const r = await fetch(urlPainel('/vendel/ver'), {
+        const r = await fetch(urlPainel('/vendel/olhar'), {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imagem: foto, pergunta: pergunta || 'O que você está vendo?' })
+          body: JSON.stringify({ pergunta: pergunta || 'O que você está vendo?' })
         });
         const d = await r.json();
         marcarEspecial(null);
-        foto = null; // a foto some da memoria do celular tambem
         if (!d.resposta) throw new Error('sem resposta');
         mostrarFala(d.resposta, Math.max(8000, d.resposta.length * 90));
         falarAlto(d.resposta, true);
@@ -827,13 +745,11 @@
   clicar('.vendel-silencio', () => { silencio = !silencio; guardar('vendel_silencio', silencio ? '1' : '0'); desenharBotoes(); });
   clicar('.vendel-mudo', () => {
     mudo = !mudo; guardar('vendel_mudo', mudo ? '1' : '0');
-    if (mudo && gravacao) { gravacao.falou = false; pararGravacao(); }
-    desenharBotoes();
+    desenharBotoes(); enviarPrivacidade();
   });
   clicar('.vendel-cego', () => {
     cego = !cego; guardar('vendel_cego', cego ? '1' : '0');
-    if (!cego) cameraFalhou = false;
-    desenharBotoes();
+    desenharBotoes(); enviarPrivacidade();
   });
   // botoes e caixas nao contam como carinho nem abrem o resumo
   secao.querySelectorAll('.vendel-controle').forEach((el) => {
@@ -909,6 +825,7 @@
   setInterval(() => {
     if (Date.now() - ultimoToque > REPOUSO_MS && podePular()) { irParaVendel(); ultimoToque = Date.now(); }
     conferirFaixa();
+    conferirPresenca();
     if (falaEl && !falaEl.hidden && Date.now() > falaAte && especial !== 'falando') falaEl.hidden = true;
     if (forma > 0 && Date.now() - formaUsoEm > 10 * 60000) {  // a transformacao cansa
       forma = 0; guardar('vendel_forma', '0'); desenharBotoes();

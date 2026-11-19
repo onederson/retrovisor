@@ -55,21 +55,22 @@ O Chrome não abre em tela cheia direto um app instalado de endereço `http://`:
 - Se a conexão cair com o painel aberto, entra o portão em X da página.
 - Se o token mudar no `config.toml`, troque também a Start URL do Fully.
 
-## Vendel no Fully: microfone, câmera e som (tela 8)
-O Fully (WebView) não tem reconhecimento de voz nem voz falada própria. Por isso o celular só **grava** e
-**toca**: quem ouve é o gemma4 no PC (1 s) e quem fala é a voz "Microsoft Daniel" do Windows.
-Para isso funcionar, no Fully (Settings → **Web Content Settings**) ligue:
-- **Enable Microphone Access** (falar com o Vendel);
-- **Enable Webcam Access** (o Vendel saber se você está na mesa e o botão de mostrar uma foto);
-- **Autoplay Videos/Audio** (ele falar sozinho os avisos, como "terminei no s10+").
-Na primeira vez o Android pergunta a permissão de câmera e microfone para o Fully: aceite.
+## Vendel: microfone, câmera e som (tela 8) — configurado em 2026-11-19
+No Fully grátis, microfone e câmera dentro da página são recurso **PLUS** (pago). Por isso quem liga o
+microfone e a câmera do celular é o **PC, pelo scrcpy** (via adb), só quando você aperta o botão, e desliga
+logo depois (`server/sentidos.py`). Nada para comprar.
+- Feito pelo adb: permissão de câmera e microfone dada ao Fully; no Fully, **Autoplay Audio** ligado (ele
+  fala os avisos sozinho). O som sai pelo volume de mídia do celular.
+- Microfone: o PC leva ~5 s para acordar o microfone do celular ("Preparando o ouvido…" → "Pode falar…").
+  Para sozinho depois de 1,4 s de silêncio (ou 15 s). Quem entende a fala é o gemma4 no PC (~2 s).
+- Câmera: o botão da câmera primeiro ouve a pergunta e depois tira a foto (~6 s), para dar tempo de você
+  colocar a coisa na frente da câmera da frente.
+- Presença ("você está aí?"): vem do teclado e do mouse do PC, não da câmera.
 
 Privacidade:
-- **mudo** (canto de baixo, à esquerda): o microfone nem abre. Mesmo sem mudo, o microfone só abre quando
-  você toca no botão e fecha sozinho quando você para de falar.
-- **cego**: a câmera nem abre, e o Vendel aparece de olhos vendados. Sem cego, a câmera abre 1 s a cada
-  10 s só para ver se tem movimento (dois quadrinhos de 32×24 em cinza, comparados no próprio celular;
-  nada sai do celular). A foto do botão da câmera vai para o PC, é olhada e jogada fora.
+- **mudo** (canto de baixo, à esquerda): o servidor se recusa a abrir o microfone do celular.
+- **cego**: o servidor se recusa a abrir a câmera, e o Vendel aparece de olhos vendados.
+- Áudio e foto ficam numa pasta temporária e são apagados na hora; nada disso vai para o Obsidian.
 - **forma** (canto de cima): base e 2 pensam no PC; 3 (agy) e suprema (Claude) pensam na nuvem, e o
   pedaço de memória da conversa sai do PC. Depois de 10 min sem conversa ele volta para a base.
 

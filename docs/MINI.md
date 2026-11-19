@@ -6,8 +6,11 @@ Status (2026-11-19): **fases 1, 2 e 3 e o cérebro feitos.**
 - Fase 3 e cérebro: projeto separado `C:/Users/Vendel/Desktop/Projetos/Vendel` (o Pestinha foi trocado por
   um cérebro próprio). Ponte no painel: `server/cerebro.py` (`/vendel/*`), que também sobe o serviço.
 - Extras pedidos depois: câmera (presença + "olha isso"), botões mudo/cego, formas do Megabrain com aura.
-- Voz: o Fully não tem voz; o PC ouve (gemma4, ~1 s, com `think: false`) e fala (voz do Windows "Daniel").
-- Pendente por decisão do dono: ligar o porteiro do Ollama (`Vendel/scripts/porteiro.ps1 -Ligar`).
+- Voz: o Fully grátis não dá microfone/câmera à página; o PC liga os do celular pelo scrcpy (`server/sentidos.py`),
+  ouve com o gemma4 (~2 s, `think: false`) e fala com a voz do Windows "Daniel". Presença = teclado/mouse do PC.
+- Porteiro do Ollama: **decidido deixar desligado** (2026-11-19). O que passa pelo Ollama hoje é quase só
+  trabalho de executor do maestro (já vem pela fonte maestro) e as conversas do próprio Vendel (já guardadas);
+  ligar faria o Ollama de todos os programas depender do serviço do Vendel. Script pronto se mudar de ideia.
 
 Diferenças em relação ao plano abaixo, decididas na implementação:
 - `Notification` de ociosidade ("Claude is waiting for your input", `notification_type = idle_prompt`)
