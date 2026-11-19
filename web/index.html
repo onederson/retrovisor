@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
   <title>Painel S10+ OLED</title>
-  <link rel="stylesheet" href="/static/style.css?v=20">
+  <link rel="stylesheet" href="/static/style.css?v=21">
   <link rel="manifest" href="/static/manifest.json?v=14">
   <meta name="theme-color" content="#000000">
   <link rel="icon" href="/static/icone-192.png">
@@ -29,6 +29,7 @@
         <span class="ponto-pag" data-indice="4" title="Tela 5: Apps"></span>
         <span class="ponto-pag" data-indice="5" title="Tela 6: Modelos e Celular"></span>
         <span class="ponto-pag" data-indice="6" title="Tela 7: Energia"></span>
+        <span class="ponto-pag" data-indice="7" title="Tela 8: Vendel"></span>
       </div>
       <div class="ponto-ws desconectado" id="ponto-ws" title="WebSocket desconectado"></div>
       <button class="botao-desligar" id="botao-desligar" title="Fechar o painel">
@@ -461,7 +462,21 @@
         </div>
       </div>
     </section>
+
+    <!-- Tela 8: Vendel. Um bichinho por janela do Claude Code (web/vendel.js, dados de server/mini.py).
+         Sem toque por 2 min, o painel vem sozinho para ca. -->
+    <section class="tela tela-vendel" id="tela-vendel">
+      <canvas class="vendel-canvas" aria-label="Vendel"></canvas>
+      <div class="vendel-camada">
+        <div class="vendel-resumo"></div>
+        <div class="vendel-hora"></div>
+        <div class="vendel-rotulos"></div>
+      </div>
+    </section>
   </main>
+
+  <!-- Aviso do Vendel em qualquer tela: uma janela do Claude precisa de voce ou terminou -->
+  <button class="vendel-faixa" id="vendel-faixa" type="button" hidden></button>
 
   <!-- Portao em X: fecha o painel enquanto o PC nao esta desbloqueado e conectado (ou desligado no botao).
        Botao "Ligar" (PC fora) ou "Desbloquear" (tela de bloqueio): o toque abre o app de digital. -->
@@ -519,6 +534,7 @@
   <!-- Overlay Preto Apagar Tela -->
   <div class="overlay-apagar-tela" id="overlay-apagar-tela"></div>
 
-  <script src="/static/app.js?v=25"></script>
+  <script src="/static/app.js?v=26"></script>
+  <script src="/static/vendel.js?v=1"></script>
 </body>
 </html>

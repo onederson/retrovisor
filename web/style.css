@@ -2184,3 +2184,105 @@ html, body {
   display: none !important;
 }
 
+
+/* ===== Tela 8: Vendel (web/vendel.js) ===== */
+.tela.tela-vendel {
+  position: relative;
+  padding: 0;
+  background: #000;
+  touch-action: pan-x;
+}
+.vendel-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+.vendel-camada {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.vendel-camada, .vendel-canvas { transition: opacity 1.5s ease; }
+.tela-vendel.noite .vendel-canvas { opacity: 0.55; }
+.tela-vendel.noite .vendel-camada { opacity: 0.4; }
+.vendel-resumo, .vendel-hora {
+  position: absolute;
+  top: 8px;
+  font-size: 13px;
+  color: var(--texto-3);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+}
+.vendel-resumo { left: 14px; }
+.vendel-hora { right: 14px; font-size: 18px; color: #2f4a39; }
+.vendel-rotulos {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6px;
+  height: 36px;
+}
+.vendel-rotulos[data-extras]:not([data-extras=""])::after {
+  content: attr(data-extras);
+  position: absolute;
+  right: 12px;
+  bottom: 4px;
+  font-size: 13px;
+  color: var(--texto-3);
+}
+.vendel-rotulo {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  text-align: center;
+  white-space: nowrap;
+  line-height: 1.25;
+  transition: left 0.3s linear;
+}
+.vendel-rotulo b {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--texto-2);
+}
+.vendel-rotulo span {
+  font-size: 12px;
+  color: var(--texto-3);
+}
+.vendel-rotulo[data-estado="precisa"] b,
+.vendel-rotulo[data-estado="precisa"] span { color: var(--ambar); }
+.vendel-rotulo[data-estado="concluido"] span { color: var(--verde); }
+
+/* Aviso em qualquer tela: abaixo do portao (z 500) e das telas de bloqueio */
+.vendel-faixa {
+  position: fixed;
+  top: 46px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 300;
+  background: #050805;
+  color: var(--verde);
+  border: 1px solid var(--verde-escuro);
+  border-radius: 999px;
+  padding: 6px 18px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.vendel-faixa[hidden] { display: none; }
+.vendel-faixa[data-tipo="precisa"] {
+  color: var(--ambar);
+  border-color: var(--ambar);
+  animation: vendel-chama 1.2s ease-in-out infinite alternate;
+}
+@keyframes vendel-chama {
+  from { box-shadow: 0 0 0 0 rgba(255, 179, 0, 0); }
+  to { box-shadow: 0 0 18px 2px rgba(255, 179, 0, 0.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vendel-faixa[data-tipo="precisa"] { animation: none; }
+}

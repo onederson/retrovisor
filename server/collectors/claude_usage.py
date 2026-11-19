@@ -1,4 +1,5 @@
 """Limites da assinatura do Claude, lidos de `claude -p "/usage"` (comando local, sem chamada ao modelo)."""
+import os
 import re
 import shutil
 import subprocess
@@ -57,6 +58,7 @@ def collect(cfg: dict, ctx: dict) -> dict:
     pasta.mkdir(parents=True, exist_ok=True)
     r = subprocess.run([exe, "-p", "/usage"], capture_output=True, text=True, encoding="utf-8",
                        errors="replace", timeout=90, cwd=pasta,
+                       env={**os.environ, "MINI": "0"},
                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     limites = parse_usage(r.stdout)
     if not limites:

@@ -1443,6 +1443,7 @@
     if (!dados.energia) avisoEnergia(null);
     else if (dados.energia_seq !== ultimoSeqEnergia) { ultimoSeqEnergia = dados.energia_seq; avisoEnergia(dados.energia); }
     atualizarBloqueio(dados.bloqueio);
+    if (window.Vendel) window.Vendel.atualizar(dados.mini); // tela 8 (web/vendel.js)
 
     // Estado do microfone
     if (dados.mic_mudo !== undefined) {

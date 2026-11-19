@@ -1,5 +1,6 @@
 import asyncio
 import hmac
+import json
 import logging
 from contextlib import asynccontextmanager
 
@@ -10,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from . import config
 from .collectors import bloqueio, midia
 from .hub import Hub
+from .mini import Mini
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 try:  # sobe junto com o Windows: o painel passa na frente dos outros programas da inicializacao
@@ -19,6 +21,7 @@ except Exception:
     pass
 CFG = config.carregar()
 HUB = Hub(CFG)
+MINI = Mini(config.caminho(CFG, "cache") / "mini.json")
 WEB = config.RAIZ / "web"
 
 try:
@@ -144,6 +147,23 @@ async def midia_comando(cmd: str, request: Request):
     return await asyncio.to_thread(midia.comando, CFG, cmd, str(sid)[:300] if sid else None, corpo.get("valor"))
 
 
+@app.post("/mini/evento")
+async def mini_evento(request: Request):
+    host = request.client.host if request.client else None
+    if not _local(host):
+        raise HTTPException(403, "acesso nao local")
+    corpo = await request.body()
+    if len(corpo) > 4096:
+        raise HTTPException(413, "corpo muito grande")
+    try:
+        dados = json.loads(corpo.decode("utf-8"))
+    except Exception:
+        raise HTTPException(400, "json invalido")
+    if not isinstance(dados, dict) or not MINI.evento(dados):
+        raise HTTPException(400, "evento invalido")
+    return {"ok": True}
+
+
 @app.websocket("/ws")
 async def ws(sock: WebSocket):
     if not autorizado(sock.client.host if sock.client else None, _token(sock)):
@@ -164,11 +184,13 @@ async def ws(sock: WebSocket):
             dados = HUB.snapshot()
             dados["energia"] = en["evento"]
             dados["energia_seq"] = en["seq"]
+            dados["mini"] = MINI.snapshot()
+            mini_seq = MINI.seq
             await sock.send_json({"tipo": "estado", "dados": dados})
             # 1 pacote/s; um aviso de energia (PC indo dormir/desligar) sai na hora
             for _ in range(10):
                 await asyncio.sleep(0.1)
-                if bloqueio.energia()["seq"] != en["seq"]:
+                if bloqueio.energia()["seq"] != en["seq"] or MINI.seq != mini_seq:
                     break
     except (WebSocketDisconnect, RuntimeError):
         pass
