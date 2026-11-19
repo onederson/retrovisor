@@ -2197,8 +2197,6 @@ html, body {
   inset: 0;
   width: 100%;
   height: 100%;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
 }
 .vendel-camada {
   position: absolute;
@@ -2459,3 +2457,39 @@ html, body {
 .vd-pequeno { min-height: 46px; }
 .vd-forma { gap: 2px; }
 .vd-rotulo { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--texto-3); }
+
+
+/* Botao de controle por gestos (camera) na barra superior */
+.botao-gestos {
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  background: var(--fundo);
+  border: 1px solid var(--verde-escuro);
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.botao-gestos svg {
+  width: 15px; height: 15px;
+  stroke: var(--texto-2); stroke-width: 1.9; fill: none; stroke-linecap: round; stroke-linejoin: round;
+}
+.botao-gestos.conectando {
+  border-color: var(--ambar);
+  animation: pulso-gestos 1s ease-in-out infinite;
+}
+.botao-gestos.conectando svg { stroke: var(--ambar); }
+.botao-gestos.ativo {
+  border-color: var(--verde);
+  background: rgba(0, 230, 118, 0.14);
+  box-shadow: 0 0 8px rgba(0, 230, 118, 0.45);
+}
+.botao-gestos.ativo svg { stroke: var(--verde); }
+.botao-gestos.erro {
+  border-color: var(--vermelho);
+}
+.botao-gestos.erro svg { stroke: var(--vermelho); }
+@keyframes pulso-gestos {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}

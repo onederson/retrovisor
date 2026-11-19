@@ -1443,6 +1443,7 @@
     if (!dados.energia) avisoEnergia(null);
     else if (dados.energia_seq !== ultimoSeqEnergia) { ultimoSeqEnergia = dados.energia_seq; avisoEnergia(dados.energia); }
     atualizarBloqueio(dados.bloqueio);
+    if (dados.gestos) atualizarGestos(dados.gestos);
     if (window.Vendel) window.Vendel.atualizar(dados.mini, dados); // tela 8 (web/vendel.js)
 
     // Estado do microfone
@@ -2573,6 +2574,91 @@
     });
   }
 
+  // Controle por gestos pela camera frontal do S10+ (via servidor)
+  let ultimoSeqGestos = null;
+  let gestosAtivo = false;
+
+  function navegarPaginaRelativa(delta) {
+    const container = document.getElementById('container-horizontal');
+    if (!container) return;
+    const telas = container.querySelectorAll('.tela');
+    if (!telas.length) return;
+    const largura = container.clientWidth || window.innerWidth;
+    const atual = Math.round(container.scrollLeft / largura);
+    const destino = Math.max(0, Math.min(telas.length - 1, atual + delta));
+    if (destino === atual) {
+      exibirToast(delta > 0 ? 'Última tela' : 'Primeira tela', true);
+      return;
+    }
+    telas[destino].scrollIntoView({ behavior: 'smooth', inline: 'start' });
+    const pontos = document.querySelectorAll('.ponto-pag');
+    const titulo = (pontos[destino] && pontos[destino].title) ? pontos[destino].title : `Tela ${destino + 1}`;
+    exibirToast(`${delta > 0 ? '→' : '←'} ${titulo}`, true);
+    if (socketAtivo && socketAtivo.readyState === WebSocket.OPEN) {
+      try { socketAtivo.send(JSON.stringify({ tipo: 'toque' })); } catch (e) {}
+    }
+  }
+
+  function atualizarGestos(info) {
+    if (!info) return;
+    gestosAtivo = Boolean(info.ativo);
+    const btn = document.getElementById('botao-gestos');
+    if (btn) {
+      btn.classList.remove('ativo', 'conectando', 'erro');
+      if (info.estado === 'ativo') {
+        btn.classList.add('ativo');
+        btn.title = 'Gestos ativos — passe a mão para esquerda ou direita';
+      } else if (info.estado === 'conectando' || info.estado === 'pausado') {
+        btn.classList.add('conectando');
+        btn.title = info.estado === 'pausado' ? 'Gestos pausados (foto)' : 'Conectando câmera para gestos…';
+      } else if (info.estado === 'erro') {
+        btn.classList.add('erro');
+        btn.title = info.erro ? `Gestos: ${info.erro}` : 'Erro nos gestos';
+      } else {
+        btn.title = 'Controle por gestos (câmera)';
+      }
+      btn.setAttribute('aria-pressed', gestosAtivo ? 'true' : 'false');
+    }
+
+    const seq = Number(info.seq || 0);
+    if (ultimoSeqGestos === null) {
+      ultimoSeqGestos = seq;
+      return;
+    }
+    if (seq > ultimoSeqGestos) {
+      ultimoSeqGestos = seq;
+      const portao = document.getElementById('portao');
+      const fechado = portao && portao.classList.contains('fechado');
+      if (!fechado && info.ultimo && info.ultimo.direcao) {
+        // Passar a mao para esquerda (como arrastar tela para esquerda) avanca de pagina (+1); direita volta (-1)
+        const delta = info.ultimo.direcao === 'esquerda' ? 1 : -1;
+        navegarPaginaRelativa(delta);
+      }
+    }
+  }
+
+  function inicializarBotaoGestos() {
+    const btn = document.getElementById('botao-gestos');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const rota = gestosAtivo ? '/gestos/desligar' : '/gestos/ligar';
+      try {
+        const resp = await fetch(comToken(rota), { method: 'POST' });
+        const dados = await resp.json();
+        if (dados) {
+          atualizarGestos(dados);
+          if (dados.ok === false) {
+            exibirToast(dados.erro || 'Não foi possível ligar gestos', false);
+          } else {
+            exibirToast(dados.ativo ? 'Gestos ligados (conectando câmera…)' : 'Gestos desligados', true);
+          }
+        }
+      } catch (err) {
+        exibirToast('Falha ao alternar gestos', false);
+      }
+    });
+  }
+
   // Conexao WebSocket com reconexao automatica (1s, 2s, 4s... ate 10s)
   let tentativaConexaoWs = 0;
   function conectarWebSocket() {
@@ -2941,6 +3027,7 @@
   // Inicializacao Geral
   window.addEventListener('DOMContentLoaded', () => {
     inicializarIndicadorPaginas();
+    inicializarBotaoGestos();
     inicializarTelaEnergia();
     inicializarTelaMidia();
     inicializarResizeSparklines();

@@ -8,11 +8,78 @@ from pathlib import Path
 
 from . import humor
 
-DIGITANDO = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
-LENDO = {"Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch"}
-EXECUTANDO = {"Bash", "PowerShell"}
-DELEGANDO = {"Agent", "Task"}
+DIGITANDO = {
+    "edit",
+    "write",
+    "multiedit",
+    "notebookedit",
+    "edit_file",
+    "write_file",
+    "write_to_file",
+    "replace_file_content",
+    "multi_replace_file_content",
+    "replace",
+    "patch",
+    "apply_patch",
+    "create_file",
+}
+LENDO = {
+    "read",
+    "grep",
+    "glob",
+    "ls",
+    "webfetch",
+    "websearch",
+    "read_file",
+    "read_many_files",
+    "view_file",
+    "view_file_outline",
+    "view_code_item",
+    "grep_search",
+    "find_by_name",
+    "list_dir",
+    "list_directory",
+    "search_web",
+    "google_web_search",
+    "read_url_content",
+    "list_resources",
+    "read_resource",
+    "list",
+}
+EXECUTANDO = {
+    "bash",
+    "powershell",
+    "run_command",
+    "send_command_input",
+    "command_status",
+    "manage_task",
+    "run_shell_command",
+    "shell",
+    "execute",
+}
+DELEGANDO = {
+    "agent",
+    "task",
+    "invoke_subagent",
+    "swarm",
+    "run_workflow",
+    "define_subagent",
+    "manage_subagents",
+    "send_message",
+}
+PRECISA_FERRAMENTA = {"ask_question", "askuserquestion"}
 ATIVOS = {"pensando", "digitando", "lendo", "executando", "delegando", "trabalhando"}
+ATIVIDADES_VALIDAS = {
+    "pescando",
+    "bibliotecario",
+    "arquiteto",
+    "testando",
+    "enviando",
+    "academia",
+    "erro",
+    "cooldown",
+    "teste_ok",
+}
 EVENTOS_VALIDOS = {
     "SessionStart",
     "UserPromptSubmit",
@@ -161,30 +228,67 @@ class Mini:
             if tipo != "ajudante":
                 tipo = "sessao"
 
+            cli_raw = dados.get("cli")
+            if cli_raw is not None and str(cli_raw).strip():
+                cli_val = str(cli_raw).strip().lower()[:24]
+            else:
+                cli_val = s_existente.get("cli") if s_existente else None
+
+            atv_raw = dados.get("atividade")
+            atv = atv_raw if atv_raw in ATIVIDADES_VALIDAS else None
+
             ferr = None
+            nova_atividade = None
             if evt == "SessionStart":
                 novo_estado = "ocioso"
+                nova_atividade = None
             elif evt == "UserPromptSubmit":
                 novo_estado = "pensando"
+                nova_atividade = None
             elif evt == "PreToolUse":
                 f_raw = dados.get("ferramenta")
                 ferr = str(f_raw)[:60] if f_raw is not None else None
-                if ferr in DIGITANDO:
+                f_low = ferr.lower() if ferr is not None else ""
+                if f_low in PRECISA_FERRAMENTA:
+                    novo_estado = "precisa"
+                elif f_low in DIGITANDO:
                     novo_estado = "digitando"
-                elif ferr in LENDO:
+                elif f_low in LENDO:
                     novo_estado = "lendo"
-                elif ferr in EXECUTANDO:
+                elif f_low in EXECUTANDO:
                     novo_estado = "executando"
-                elif ferr in DELEGANDO:
+                elif f_low in DELEGANDO:
                     novo_estado = "delegando"
                 else:
                     novo_estado = "trabalhando"
+
+                if atv is not None:
+                    nova_atividade = atv
+                else:
+                    if f_low in {"webfetch", "websearch", "search_web", "google_web_search", "read_url_content"}:
+                        nova_atividade = "pescando"
+                    elif f_low in {"read_many_files", "glob", "find_by_name", "list_dir", "list_directory"}:
+                        nova_atividade = "bibliotecario"
+                    elif f_low in {"enterplanmode", "plan", "create_plan", "write_plan"}:
+                        nova_atividade = "arquiteto"
+                    elif f_low in EXECUTANDO:
+                        nova_atividade = "academia"
+                    else:
+                        nova_atividade = None
             elif evt == "PostToolUse":
                 novo_estado = "pensando"
+                if atv in {"erro", "cooldown"}:
+                    nova_atividade = atv
+                elif s_existente and s_existente.get("atividade") == "testando":
+                    nova_atividade = "teste_ok"
+                else:
+                    nova_atividade = None
             elif evt == "Notification":
                 novo_estado = "precisa"
+                nova_atividade = None
             elif evt == "Stop":
                 novo_estado = "concluido"
+                nova_atividade = None
             else:
                 return False
 
@@ -196,6 +300,8 @@ class Mini:
                 s_existente["projeto"] = proj
                 s_existente["ferramenta"] = ferr
                 s_existente["tipo"] = tipo
+                s_existente["cli"] = cli_val
+                s_existente["atividade"] = nova_atividade
             else:
                 self.sessoes[sessao] = {
                     "sessao": sessao,
@@ -203,6 +309,8 @@ class Mini:
                     "estado": novo_estado,
                     "ferramenta": ferr,
                     "tipo": tipo,
+                    "cli": cli_val,
+                    "atividade": nova_atividade,
                     "desde": agora,
                     "ultimo": agora,
                     "criada": agora,
@@ -253,11 +361,13 @@ class Mini:
                     s["estado"] = "ocioso"
                     s["desde"] = agora
                     s["ferramenta"] = None
+                    s["atividade"] = None
                     mudou = True
                 elif s["estado"] == "concluido" and tempo_sem_evento > 10:
                     s["estado"] = "ocioso"
                     s["desde"] = agora
                     s["ferramenta"] = None
+                    s["atividade"] = None
                     mudou = True
 
             if mudou:
@@ -274,6 +384,8 @@ class Mini:
                     "estado": s["estado"],
                     "ferramenta": s["ferramenta"],
                     "tipo": s["tipo"],
+                    "cli": s.get("cli"),
+                    "atividade": s.get("atividade"),
                     "desde": datetime.fromtimestamp(s["desde"])
                     .astimezone()
                     .isoformat(timespec="seconds"),

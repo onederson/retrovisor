@@ -256,20 +256,22 @@ def foto(cfg: dict) -> bytes:
     exe, serial = _scrcpy(cfg), _serial(cfg)
     if not exe or not serial:
         raise RuntimeError("scrcpy ou celular nao configurado")
-    pasta = Path(tempfile.mkdtemp(prefix="vendel_olho_"))
-    try:
-        subprocess.run([exe, "-s", serial, "--video-source=camera", "--camera-facing=front",
-                        "--camera-size=1280x720", "--no-audio", "--no-playback", "--record=cam.mkv",
-                        "--time-limit=2"], cwd=pasta, env=_env(cfg), timeout=40, creationflags=SEM_JANELA,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        giro = _giro_camera(cfg)
-        filtro = {90: ["-vf", "transpose=1"], 180: ["-vf", "transpose=1,transpose=1"], 270: ["-vf", "transpose=2"]}
-        subprocess.run(["ffmpeg", "-loglevel", "error", "-sseof", "-0.3", "-i", "cam.mkv", "-frames:v", "1",
-                        *filtro.get(giro, []), "-q:v", "4", "cam.jpg"], cwd=pasta, timeout=30,
-                       creationflags=SEM_JANELA, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        jpg = pasta / "cam.jpg"
-        if not jpg.exists():
-            raise RuntimeError("a camera do celular nao abriu")
-        return jpg.read_bytes()
-    finally:
-        _apagar(pasta)
+    from . import gestos
+    with gestos.GESTOS.pausar_para_foto():
+        pasta = Path(tempfile.mkdtemp(prefix="vendel_olho_"))
+        try:
+            subprocess.run([exe, "-s", serial, "--video-source=camera", "--camera-facing=front",
+                            "--camera-size=1280x720", "--no-audio", "--no-playback", "--record=cam.mkv",
+                            "--time-limit=2"], cwd=pasta, env=_env(cfg), timeout=40, creationflags=SEM_JANELA,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            giro = _giro_camera(cfg)
+            filtro = {90: ["-vf", "transpose=1"], 180: ["-vf", "transpose=1,transpose=1"], 270: ["-vf", "transpose=2"]}
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-sseof", "-0.3", "-i", "cam.mkv", "-frames:v", "1",
+                            *filtro.get(giro, []), "-q:v", "4", "cam.jpg"], cwd=pasta, timeout=30,
+                           creationflags=SEM_JANELA, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            jpg = pasta / "cam.jpg"
+            if not jpg.exists():
+                raise RuntimeError("a camera do celular nao abriu")
+            return jpg.read_bytes()
+        finally:
+            _apagar(pasta)

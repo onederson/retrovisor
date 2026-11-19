@@ -379,3 +379,595 @@ def test_hook_mini(monkeypatch):
     assert r_invalido.returncode == 0
     assert r_invalido.stdout == b""
     assert r_invalido.stderr == b""
+
+
+def test_multi_cli_ferramentas_e_cli_snapshot(tmp_path):
+    relogio = RelogioFalso()
+    mini = Mini(tmp_path / "mini.json", relogio=relogio)
+
+    ferramentas_esperadas = [
+        ("edit_file", "digitando"),
+        ("write_file", "digitando"),
+        ("read_file", "lendo"),
+        ("grep_search", "lendo"),
+        ("run_command", "executando"),
+        ("run_shell_command", "executando"),
+        ("invoke_subagent", "delegando"),
+        ("swarm", "delegando"),
+        ("ask_question", "precisa"),
+        ("bash", "executando"),
+        ("patch", "digitando"),
+    ]
+
+    for ferr, estado_esperado in ferramentas_esperadas:
+        sid = f"sess_{ferr}"
+        ok = mini.evento({
+            "sessao": sid,
+            "evento": "PreToolUse",
+            "ferramenta": ferr,
+            "projeto": "proj",
+        })
+        assert ok is True
+        snap = mini.snapshot()
+        sid_hash = hashlib.sha1(sid.encode()).hexdigest()[:6]
+        sessao_snap = next(s for s in snap["sessoes"] if s["id"] == sid_hash)
+        assert sessao_snap["estado"] == estado_esperado
+
+    # Case-insensitive
+    mini.evento({"sessao": "s_case", "evento": "PreToolUse", "ferramenta": "EDIT_FILE"})
+    s_case = next(s for s in mini.snapshot()["sessoes"] if s["id"] == hashlib.sha1(b"s_case").hexdigest()[:6])
+    assert s_case["estado"] == "digitando"
+
+    # Preservacao do campo cli
+    mini.evento({"sessao": "s_cli", "evento": "UserPromptSubmit", "cli": "  AGY  "})
+    snap_cli = mini.snapshot()
+    s_cli = next(s for s in snap_cli["sessoes"] if s["id"] == hashlib.sha1(b"s_cli").hexdigest()[:6])
+    assert s_cli["cli"] == "agy"
+
+    # Evento subsequente sem cli preserva o cli anterior
+    mini.evento({"sessao": "s_cli", "evento": "PreToolUse", "ferramenta": "edit_file"})
+    snap_cli2 = mini.snapshot()
+    s_cli2 = next(s for s in snap_cli2["sessoes"] if s["id"] == hashlib.sha1(b"s_cli").hexdigest()[:6])
+    assert s_cli2["cli"] == "agy"
+    assert s_cli2["estado"] == "digitando"
+
+
+def test_hook_mini_agy():
+    corpos = []
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            tam = int(self.headers.get("Content-Length", 0))
+            corpos.append(self.rfile.read(tam))
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+
+        def log_message(self, *args):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    porta = srv.server_address[1]
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        # PreToolUse com camelCase
+        entrada_pre = json.dumps({
+            "conversationId": "conv-agy-1",
+            "hookEventName": "PreToolUse",
+            "workspacePaths": ["C:/workspace/proj1"],
+            "toolCall": {"name": "read_file"},
+        }).encode("utf-8")
+
+        env = {**os.environ, "MINI_PORTA": str(porta), "MINI": "sessao"}
+        r_pre = subprocess.run(
+            [sys.executable, "-I", "scripts/mini_hook.py", "--cli", "agy"],
+            input=entrada_pre,
+            capture_output=True,
+            env=env,
+            timeout=5,
+        )
+        assert r_pre.returncode == 0
+        assert json.loads(r_pre.stdout.decode()) == {"decision": "allow"}
+        assert len(corpos) == 1
+        d_pre = json.loads(corpos[0])
+        assert d_pre["sessao"] == "conv-agy-1"
+        assert d_pre["evento"] == "PreToolUse"
+        assert d_pre["projeto"] == "proj1"
+        assert d_pre["ferramenta"] == "read_file"
+        assert d_pre["cli"] == "agy"
+
+        # Outros eventos: Stop, PreInvocation, SessionStart, PostToolUse -> stdout {}
+        for ev in ["Stop", "PreInvocation", "SessionStart", "PostToolUse"]:
+            corpos.clear()
+            entrada_ev = json.dumps({
+                "conversationId": "conv-agy-1",
+                "hookEventName": ev,
+                "workspacePaths": ["C:/workspace/proj1"],
+            }).encode("utf-8")
+            r_ev = subprocess.run(
+                [sys.executable, "-I", "scripts/mini_hook.py", "--cli", "agy"],
+                input=entrada_ev,
+                capture_output=True,
+                env=env,
+                timeout=5,
+            )
+            assert r_ev.returncode == 0
+            assert json.loads(r_ev.stdout.decode()) == {}
+
+        # MINI=0 -> servidor nao recebe, mas stdout ainda e emitido
+        corpos.clear()
+        env_zero = {**os.environ, "MINI_PORTA": str(porta), "MINI": "0"}
+        r_zero = subprocess.run(
+            [sys.executable, "-I", "scripts/mini_hook.py", "--cli", "agy"],
+            input=entrada_pre,
+            capture_output=True,
+            env=env_zero,
+            timeout=5,
+        )
+        assert r_zero.returncode == 0
+        assert len(corpos) == 0
+        assert json.loads(r_zero.stdout.decode()) == {"decision": "allow"}
+
+    finally:
+        srv.shutdown()
+
+    # Servidor fechado -> ainda imprime JSON valido e sai 0
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    porta_livre = s.getsockname()[1]
+    s.close()
+
+    env_fechado = {**os.environ, "MINI_PORTA": str(porta_livre)}
+    env_fechado.pop("MINI", None)
+    r_fechado = subprocess.run(
+        [sys.executable, "-I", "scripts/mini_hook.py", "--cli", "agy"],
+        input=entrada_pre,
+        capture_output=True,
+        env=env_fechado,
+        timeout=5,
+    )
+    assert r_fechado.returncode == 0
+    assert json.loads(r_fechado.stdout.decode()) == {"decision": "allow"}
+    assert r_fechado.stderr == b""
+
+
+def test_hook_mini_gemini():
+    corpos = []
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            tam = int(self.headers.get("Content-Length", 0))
+            corpos.append(self.rfile.read(tam))
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+
+        def log_message(self, *args):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    porta = srv.server_address[1]
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        env = {**os.environ, "MINI_PORTA": str(porta), "MINI": "sessao"}
+        casos = [
+            ("BeforeAgent", "UserPromptSubmit", None),
+            ("BeforeTool", "PreToolUse", "run_shell_command"),
+            ("AfterTool", "PostToolUse", None),
+            ("AfterAgent", "Stop", None),
+        ]
+        for evt_bruto, evt_esperado, ferr in casos:
+            corpos.clear()
+            dados = {
+                "session_id": "gem-sess",
+                "hook_event_name": evt_bruto,
+                "cwd": "C:/projetos/meu_gemini",
+            }
+            if ferr:
+                dados["tool_name"] = ferr
+
+            r = subprocess.run(
+                [sys.executable, "-I", "scripts/mini_hook.py", "--cli", "gemini"],
+                input=json.dumps(dados).encode("utf-8"),
+                capture_output=True,
+                env=env,
+                timeout=5,
+            )
+            assert r.returncode == 0
+            assert json.loads(r.stdout.decode()) == {}
+            assert len(corpos) == 1
+            recebido = json.loads(corpos[0])
+            assert recebido["evento"] == evt_esperado
+            assert recebido["cli"] == "gemini"
+            assert recebido["projeto"] == "meu_gemini"
+            if ferr:
+                assert recebido["ferramenta"] == ferr
+    finally:
+        srv.shutdown()
+
+
+def test_hook_mini_codex():
+    corpos = []
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            tam = int(self.headers.get("Content-Length", 0))
+            corpos.append(self.rfile.read(tam))
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+
+        def log_message(self, *args):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    porta = srv.server_address[1]
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        env = {**os.environ, "MINI_PORTA": str(porta), "MINI": "sessao"}
+        json_arg = json.dumps({
+            "type": "agent-turn-complete",
+            "thread-id": "th-1",
+            "cwd": "C:/x/s10+",
+        })
+        r = subprocess.run(
+            [sys.executable, "-I", "scripts/mini_hook.py", json_arg],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            env=env,
+            timeout=5,
+        )
+        assert r.returncode == 0
+        assert r.stdout == b""
+        assert len(corpos) == 1
+        d = json.loads(corpos[0])
+        assert d["sessao"] == "th-1"
+        assert d["evento"] == "Stop"
+        assert d["projeto"] == "s10+"
+        assert d["cli"] == "codex"
+    finally:
+        srv.shutdown()
+
+
+def test_instalar_vendel(tmp_path):
+    # Simula ~/.claude, ~/.gemini/config (com hooks.json contendo ai-memory),
+    # ~/.gemini/settings.json e ~/.config/opencode
+    claude_dir = tmp_path / ".claude"
+    claude_dir.mkdir(parents=True)
+
+    gemini_config_dir = tmp_path / ".gemini" / "config"
+    gemini_config_dir.mkdir(parents=True)
+    hooks_json = gemini_config_dir / "hooks.json"
+    hooks_json.write_text(json.dumps({"ai-memory": {"regras": ["r1"]}}, indent=2) + "\n", encoding="utf-8")
+
+    gemini_settings = tmp_path / ".gemini" / "settings.json"
+    gemini_settings.write_text(json.dumps({"tema": "escuro"}, indent=2) + "\n", encoding="utf-8")
+
+    opencode_dir = tmp_path / ".config" / "opencode"
+    opencode_dir.mkdir(parents=True)
+
+    # 1. Instalação
+    r1 = subprocess.run(
+        [sys.executable, "-I", "scripts/instalar_vendel.py", "--home", str(tmp_path)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert r1.returncode == 0
+    assert "Claude Code" in r1.stdout
+    assert "Antigravity (agy)" in r1.stdout
+    assert "Gemini CLI" in r1.stdout
+    assert "OpenCode" in r1.stdout
+
+    # Verifica Claude
+    claude_settings = claude_dir / "settings.json"
+    assert claude_settings.exists()
+    claude_cfg = json.loads(claude_settings.read_text(encoding="utf-8"))
+    assert "SessionStart" in claude_cfg["hooks"]
+    assert "mini_hook.py" in claude_cfg["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+    assert "--cli claude" in claude_cfg["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+
+    # Verifica Antigravity (agy)
+    agy_cfg = json.loads(hooks_json.read_text(encoding="utf-8"))
+    assert agy_cfg["ai-memory"] == {"regras": ["r1"]}
+    assert "vendel" in agy_cfg
+    assert "SessionStart" in agy_cfg["vendel"]
+    assert "PreToolUse" in agy_cfg["vendel"]
+    assert "--cli agy" in agy_cfg["vendel"]["SessionStart"][0]["command"]
+    assert (gemini_config_dir / "hooks.json.antes-do-vendel").exists()
+
+    # Verifica Gemini CLI
+    gem_cfg = json.loads(gemini_settings.read_text(encoding="utf-8"))
+    assert gem_cfg["tema"] == "escuro"
+    assert "hooks" in gem_cfg
+    assert "BeforeTool" in gem_cfg["hooks"]
+    assert gem_cfg["hooks"]["BeforeTool"][0]["matcher"] == ".*"
+    assert gem_cfg["hooks"]["BeforeTool"][0]["hooks"][0]["timeout"] == 5000
+    assert "--cli gemini" in gem_cfg["hooks"]["BeforeTool"][0]["hooks"][0]["command"]
+    assert (tmp_path / ".gemini" / "settings.json.antes-do-vendel").exists()
+
+    # Verifica OpenCode
+    plugin_js = opencode_dir / "plugins" / "vendel.js"
+    assert plugin_js.exists()
+    assert "export const VendelPlugin" in plugin_js.read_text(encoding="utf-8")
+
+    # 2. Idempotência: rodar 2x
+    r2 = subprocess.run(
+        [sys.executable, "-I", "scripts/instalar_vendel.py", "--home", str(tmp_path)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert r2.returncode == 0
+    claude_cfg2 = json.loads(claude_settings.read_text(encoding="utf-8"))
+    assert len(claude_cfg2["hooks"]["SessionStart"]) == 1
+    gem_cfg2 = json.loads(gemini_settings.read_text(encoding="utf-8"))
+    assert len(gem_cfg2["hooks"]["SessionStart"]) == 1
+    agy_cfg2 = json.loads(hooks_json.read_text(encoding="utf-8"))
+    assert agy_cfg2["ai-memory"] == {"regras": ["r1"]}
+    assert "vendel" in agy_cfg2
+
+    # 3. Remoção limpa com --remover
+    r3 = subprocess.run(
+        [sys.executable, "-I", "scripts/instalar_vendel.py", "--home", str(tmp_path), "--remover"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert r3.returncode == 0
+    assert "desligado de" in r3.stdout
+
+    # Claude: sem hooks do vendel
+    claude_cfg3 = json.loads(claude_settings.read_text(encoding="utf-8"))
+    assert "hooks" not in claude_cfg3 or not claude_cfg3["hooks"]
+
+    # Antigravity: "vendel" removido, "ai-memory" preservado
+    agy_cfg3 = json.loads(hooks_json.read_text(encoding="utf-8"))
+    assert "vendel" not in agy_cfg3
+    assert agy_cfg3["ai-memory"] == {"regras": ["r1"]}
+
+    # Gemini: hooks do vendel removidos, "tema" preservado
+    gem_cfg3 = json.loads(gemini_settings.read_text(encoding="utf-8"))
+    assert gem_cfg3.get("tema") == "escuro"
+    assert "hooks" not in gem_cfg3 or not gem_cfg3["hooks"]
+
+    # OpenCode: vendel.js removido
+    assert not plugin_js.exists()
+
+
+def test_mini_atividade_server(tmp_path):
+    relogio = RelogioFalso()
+    mini = Mini(tmp_path / "mini.json", relogio=relogio)
+
+    # 1. Inferencia automatica no PreToolUse sem atividade
+    # WebSearch -> estado="lendo", atividade="pescando"
+    mini.evento({"sessao": "s_web", "evento": "PreToolUse", "ferramenta": "WebSearch"})
+    snap = mini.snapshot()
+    s = next(x for x in snap["sessoes"] if x["id"] == hashlib.sha1(b"s_web").hexdigest()[:6])
+    assert s["estado"] == "lendo"
+    assert s["atividade"] == "pescando"
+
+    # Glob -> estado="lendo", atividade="bibliotecario"
+    mini.evento({"sessao": "s_glob", "evento": "PreToolUse", "ferramenta": "Glob"})
+    snap = mini.snapshot()
+    s = next(x for x in snap["sessoes"] if x["id"] == hashlib.sha1(b"s_glob").hexdigest()[:6])
+    assert s["estado"] == "lendo"
+    assert s["atividade"] == "bibliotecario"
+
+    # Bash -> estado="executando", atividade="academia"
+    mini.evento({"sessao": "s_bash", "evento": "PreToolUse", "ferramenta": "Bash"})
+    snap = mini.snapshot()
+    s = next(x for x in snap["sessoes"] if x["id"] == hashlib.sha1(b"s_bash").hexdigest()[:6])
+    assert s["estado"] == "executando"
+    assert s["atividade"] == "academia"
+
+    # 2. Passagem explicita de atividade="testando" seguida de PostToolUse sem erro -> atividade="teste_ok"
+    mini.evento({"sessao": "s_test", "evento": "PreToolUse", "ferramenta": "Bash", "atividade": "testando"})
+    snap = mini.snapshot()
+    s = next(x for x in snap["sessoes"] if x["id"] == hashlib.sha1(b"s_test").hexdigest()[:6])
+    assert s["estado"] == "executando"
+    assert s["atividade"] == "testando"
+
+    mini.evento({"sessao": "s_test", "evento": "PostToolUse"})
+    snap = mini.snapshot()
+    s = next(x for x in snap["sessoes"] if x["id"] == hashlib.sha1(b"s_test").hexdigest()[:6])
+    assert s["estado"] == "pensando"
+    assert s["atividade"] == "teste_ok"
+
+    # 3. PostToolUse com atividade="erro" e atividade="cooldown"
+    mini.evento({"sessao": "s_err", "evento": "PreToolUse", "ferramenta": "Bash", "atividade": "testando"})
+    mini.evento({"sessao": "s_err", "evento": "PostToolUse", "atividade": "erro"})
+    snap = mini.snapshot()
+    s = next(x for x in snap["sessoes"] if x["id"] == hashlib.sha1(b"s_err").hexdigest()[:6])
+    assert s["atividade"] == "erro"
+
+    mini.evento({"sessao": "s_cd", "evento": "PreToolUse", "ferramenta": "Bash", "atividade": "pescando"})
+    mini.evento({"sessao": "s_cd", "evento": "PostToolUse", "atividade": "cooldown"})
+    snap = mini.snapshot()
+    s = next(x for x in snap["sessoes"] if x["id"] == hashlib.sha1(b"s_cd").hexdigest()[:6])
+    assert s["atividade"] == "cooldown"
+
+    # 4. Rejeicao de atividade invalida (ignorada como None)
+    # Com ferramenta sem fallback: Edit -> atividade fica None
+    mini.evento({"sessao": "s_inv1", "evento": "PreToolUse", "ferramenta": "Edit", "atividade": "valor_invalido_xyz"})
+    snap = mini.snapshot()
+    s = next(x for x in snap["sessoes"] if x["id"] == hashlib.sha1(b"s_inv1").hexdigest()[:6])
+    assert s["estado"] == "digitando"
+    assert s["atividade"] is None
+
+    # Com ferramenta com fallback: Bash -> atividade invalida ignorada, fallback aplica "academia"
+    mini.evento({"sessao": "s_inv2", "evento": "PreToolUse", "ferramenta": "Bash", "atividade": "valor_invalido_xyz"})
+    snap = mini.snapshot()
+    s = next(x for x in snap["sessoes"] if x["id"] == hashlib.sha1(b"s_inv2").hexdigest()[:6])
+    assert s["estado"] == "executando"
+    assert s["atividade"] == "academia"
+
+    # Em PostToolUse com atividade invalida (e sem sessao anterior de testando) -> None
+    mini.evento({"sessao": "s_inv3", "evento": "PostToolUse", "atividade": "valor_invalido_xyz"})
+    snap = mini.snapshot()
+    s = next(x for x in snap["sessoes"] if x["id"] == hashlib.sha1(b"s_inv3").hexdigest()[:6])
+    assert s["atividade"] is None
+
+    # 5. Limpeza de atividade em Stop, SessionStart, UserPromptSubmit, Notification
+    for evt in ["Stop", "UserPromptSubmit", "Notification", "SessionStart"]:
+        mini.evento({"sessao": f"s_limpa_{evt}", "evento": "PreToolUse", "ferramenta": "Bash", "atividade": "testando"})
+        mini.evento({"sessao": f"s_limpa_{evt}", "evento": evt})
+        snap = mini.snapshot()
+        s = next(x for x in snap["sessoes"] if x["id"] == hashlib.sha1(f"s_limpa_{evt}".encode()).hexdigest()[:6])
+        assert s["atividade"] is None
+
+
+def test_mini_hook_atividade_classificacao_e_privacidade(monkeypatch):
+    from scripts.mini_hook import _detectar_atividade
+
+    # 1. Classificacao unitaria em _detectar_atividade
+    # pytest -> "testando"
+    assert _detectar_atividade("PreToolUse", "bash", {"tool_input": {"command": "pytest -q"}}) == "testando"
+    assert _detectar_atividade("PreToolUse", "powershell", {"tool_input": "npm test"}) == "testando"
+    assert _detectar_atividade("PreToolUse", "run_command", {"arguments": {"CommandLine": "vitest run"}}) == "testando"
+
+    # git push -> "enviando"
+    assert _detectar_atividade("PreToolUse", "bash", {"tool_input": {"command": "git push origin main"}}) == "enviando"
+    assert _detectar_atividade("PreToolUse", "bash", {"tool_input": {"command": "git commit -m 'feat'"}}) == "enviando"
+    assert _detectar_atividade("PreToolUse", "bash", {"tool_input": {"command": "gh pr create --title foo"}}) == "enviando"
+
+    # arquiteto
+    assert _detectar_atividade("PreToolUse", "plan", {}) == "arquiteto"
+    assert _detectar_atividade("PreToolUse", "bash", {"tool_input": {"command": "mkdir src"}}) == "arquiteto"
+
+    # pescando e bibliotecario
+    assert _detectar_atividade("PreToolUse", "websearch", {}) == "pescando"
+    assert _detectar_atividade("PreToolUse", "glob", {}) == "bibliotecario"
+
+    # PostToolUse com is_error: True -> "erro"
+    assert _detectar_atividade("PostToolUse", None, {"is_error": True}) == "erro"
+    assert _detectar_atividade("PostToolUse", None, {"exit_code": 1}) == "erro"
+    assert _detectar_atividade("PostToolUse", None, {"tool_response": {"is_error": True}}) == "erro"
+
+    # PostToolUse com "429 Too Many Requests" -> "cooldown"
+    assert _detectar_atividade("PostToolUse", None, {"error": "Error: 429 Too Many Requests"}) == "cooldown"
+    assert _detectar_atividade("PostToolUse", None, {"tool_response": "Rate limit reached. Quota exceeded."}) == "cooldown"
+    assert _detectar_atividade("PostToolUse", None, {"result": "retry-after: 30"}) == "cooldown"
+
+    # 2. Teste ponta a ponta com subprocess garantindo que comando bruto NUNCA vaza no payload
+    corpos = []
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            tam = int(self.headers.get("Content-Length", 0))
+            corpos.append(self.rfile.read(tam))
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+
+        def log_message(self, *args):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    porta = srv.server_address[1]
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        env = {**os.environ, "MINI_PORTA": str(porta), "MINI": "sessao"}
+
+        # Caso A: pytest com comando potencialmente sensivel
+        comando_sensivel = "pytest tests/test_segredo.py --token=SUPER_SECRET_TOKEN_XYZ_123"
+        entrada_pytest = json.dumps({
+            "session_id": "sess-priv-1",
+            "hook_event_name": "PreToolUse",
+            "cwd": "C:/projetos/meu_app",
+            "tool_name": "Bash",
+            "tool_input": {"command": comando_sensivel},
+        }).encode("utf-8")
+
+        r = subprocess.run(
+            [sys.executable, "-I", "scripts/mini_hook.py"],
+            input=entrada_pytest,
+            capture_output=True,
+            env=env,
+            timeout=5,
+        )
+        assert r.returncode == 0
+        assert len(corpos) == 1
+        d = json.loads(corpos[0])
+        assert d["sessao"] == "sess-priv-1"
+        assert d["evento"] == "PreToolUse"
+        assert d["ferramenta"] == "Bash"
+        assert d["atividade"] == "testando"
+        # Regra critica de privacidade: NUNCA enviar comando bruto nem partes sensiveis
+        payload_str = corpos[0].decode("utf-8")
+        assert "SUPER_SECRET_TOKEN_XYZ_123" not in payload_str
+        assert "test_segredo.py" not in payload_str
+        assert "command" not in d
+        assert "tool_input" not in d
+
+        # Caso B: git push
+        corpos.clear()
+        entrada_git = json.dumps({
+            "session_id": "sess-priv-2",
+            "hook_event_name": "PreToolUse",
+            "cwd": "C:/projetos/meu_app",
+            "tool_name": "bash",
+            "tool_input": {"command": "git push origin main"},
+        }).encode("utf-8")
+        r_git = subprocess.run(
+            [sys.executable, "-I", "scripts/mini_hook.py"],
+            input=entrada_git,
+            capture_output=True,
+            env=env,
+            timeout=5,
+        )
+        assert r_git.returncode == 0
+        assert len(corpos) == 1
+        d_git = json.loads(corpos[0])
+        assert d_git["atividade"] == "enviando"
+        assert "git push origin main" not in corpos[0].decode("utf-8")
+
+        # Caso C: PostToolUse com is_error: True
+        corpos.clear()
+        entrada_erro = json.dumps({
+            "session_id": "sess-priv-3",
+            "hook_event_name": "PostToolUse",
+            "cwd": "C:/projetos/meu_app",
+            "is_error": True,
+            "tool_response": "detalhes internos confidenciais",
+        }).encode("utf-8")
+        r_err = subprocess.run(
+            [sys.executable, "-I", "scripts/mini_hook.py"],
+            input=entrada_erro,
+            capture_output=True,
+            env=env,
+            timeout=5,
+        )
+        assert r_err.returncode == 0
+        assert len(corpos) == 1
+        d_err = json.loads(corpos[0])
+        assert d_err["atividade"] == "erro"
+        assert "detalhes internos confidenciais" not in corpos[0].decode("utf-8")
+
+        # Caso D: PostToolUse com "429 Too Many Requests"
+        corpos.clear()
+        entrada_cooldown = json.dumps({
+            "session_id": "sess-priv-4",
+            "hook_event_name": "PostToolUse",
+            "cwd": "C:/projetos/meu_app",
+            "error": "HTTP 429 Too Many Requests: quota exceeded",
+        }).encode("utf-8")
+        r_cd = subprocess.run(
+            [sys.executable, "-I", "scripts/mini_hook.py"],
+            input=entrada_cooldown,
+            capture_output=True,
+            env=env,
+            timeout=5,
+        )
+        assert r_cd.returncode == 0
+        assert len(corpos) == 1
+        d_cd = json.loads(corpos[0])
+        assert d_cd["atividade"] == "cooldown"
+        assert "HTTP 429 Too Many Requests: quota exceeded" not in corpos[0].decode("utf-8")
+
+    finally:
+        srv.shutdown()

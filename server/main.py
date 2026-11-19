@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import cerebro, config, humor, sentidos
+from . import cerebro, config, gestos, humor, sentidos
 from .collectors import bloqueio, midia
 from .hub import Hub
 from .mini import Mini
@@ -37,6 +37,7 @@ async def ciclo(app: FastAPI):
     HUB.iniciar()
     asyncio.get_running_loop().run_in_executor(None, cerebro.garantir_servico, CFG)  # cerebro do Vendel
     yield
+    gestos.GESTOS.parar()
     await HUB.parar()
 
 
@@ -216,6 +217,27 @@ def calcular_humor(mini_snap: dict, hub_estado: dict, hora: int | None = None) -
         return None
 
 
+@app.get("/gestos/estado")
+def gestos_estado(request: Request):
+    if not autorizado(request.client.host if request.client else None, _token(request)):
+        raise HTTPException(403, "token invalido")
+    return gestos.GESTOS.info()
+
+
+@app.post("/gestos/ligar")
+async def gestos_ligar(request: Request):
+    if not autorizado(request.client.host if request.client else None, _token(request)):
+        raise HTTPException(403, "token invalido")
+    return await asyncio.to_thread(gestos.GESTOS.iniciar, CFG)
+
+
+@app.post("/gestos/desligar")
+async def gestos_desligar(request: Request):
+    if not autorizado(request.client.host if request.client else None, _token(request)):
+        raise HTTPException(403, "token invalido")
+    return await asyncio.to_thread(gestos.GESTOS.parar)
+
+
 @app.websocket("/ws")
 async def ws(sock: WebSocket):
     if not autorizado(sock.client.host if sock.client else None, _token(sock)):
@@ -240,6 +262,8 @@ async def ws(sock: WebSocket):
                 sentidos.PRIVACIDADE["cego"] = bool(msg.get("cego"))
                 if sentidos.PRIVACIDADE["mudo"]:
                     sentidos.OUVIDO.parar()
+                if sentidos.PRIVACIDADE["cego"]:
+                    gestos.GESTOS.parar()
 
     leitor = asyncio.create_task(receber())
     try:
@@ -250,16 +274,24 @@ async def ws(sock: WebSocket):
             dados["energia_seq"] = en["seq"]
             dados["mini"] = MINI.snapshot()
             dados["mini"]["pc_parado_s"] = sentidos.pc_parado_s()  # presenca: teclado/mouse do PC
+            dados["gestos"] = gestos.GESTOS.info()
             try:
                 dados["mini"]["humor"] = calcular_humor(dados["mini"], HUB.estado)
             except Exception:
                 pass
             mini_seq = MINI.seq
+            gestos_seq = gestos.GESTOS.seq
+            gestos_estado_atual = dados["gestos"]["estado"]
             await sock.send_json({"tipo": "estado", "dados": dados})
-            # 1 pacote/s; um aviso de energia (PC indo dormir/desligar) sai na hora
-            for _ in range(10):
-                await asyncio.sleep(0.1)
-                if bloqueio.energia()["seq"] != en["seq"] or MINI.seq != mini_seq:
+            # 1 pacote/s; energia, mini ou gesto sai na hora (~50 ms)
+            for _ in range(20):
+                await asyncio.sleep(0.05)
+                if (
+                    bloqueio.energia()["seq"] != en["seq"]
+                    or MINI.seq != mini_seq
+                    or gestos.GESTOS.seq != gestos_seq
+                    or gestos.GESTOS.estado != gestos_estado_atual
+                ):
                     break
     except (WebSocketDisconnect, RuntimeError):
         pass

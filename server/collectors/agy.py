@@ -1,5 +1,6 @@
 from datetime import datetime
 import json
+import os
 import subprocess
 from server.config import caminho
 
@@ -111,6 +112,7 @@ def collect(cfg: dict, ctx: dict) -> dict:
             text=True,
             encoding="utf-8",
             timeout=90,
+            env={**os.environ, "MINI": "0"},
         )
         if proc.returncode == 0:
             parsed = parse_usage(proc.stdout)
