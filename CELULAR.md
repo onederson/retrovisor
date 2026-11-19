@@ -55,6 +55,24 @@ O Chrome não abre em tela cheia direto um app instalado de endereço `http://`:
 - Se a conexão cair com o painel aberto, entra o portão em X da página.
 - Se o token mudar no `config.toml`, troque também a Start URL do Fully.
 
+## Vendel no Fully: microfone, câmera e som (tela 8)
+O Fully (WebView) não tem reconhecimento de voz nem voz falada própria. Por isso o celular só **grava** e
+**toca**: quem ouve é o gemma4 no PC (1 s) e quem fala é a voz "Microsoft Daniel" do Windows.
+Para isso funcionar, no Fully (Settings → **Web Content Settings**) ligue:
+- **Enable Microphone Access** (falar com o Vendel);
+- **Enable Webcam Access** (o Vendel saber se você está na mesa e o botão de mostrar uma foto);
+- **Autoplay Videos/Audio** (ele falar sozinho os avisos, como "terminei no s10+").
+Na primeira vez o Android pergunta a permissão de câmera e microfone para o Fully: aceite.
+
+Privacidade:
+- **mudo** (canto de baixo, à esquerda): o microfone nem abre. Mesmo sem mudo, o microfone só abre quando
+  você toca no botão e fecha sozinho quando você para de falar.
+- **cego**: a câmera nem abre, e o Vendel aparece de olhos vendados. Sem cego, a câmera abre 1 s a cada
+  10 s só para ver se tem movimento (dois quadrinhos de 32×24 em cinza, comparados no próprio celular;
+  nada sai do celular). A foto do botão da câmera vai para o PC, é olhada e jogada fora.
+- **forma** (canto de cima): base e 2 pensam no PC; 3 (agy) e suprema (Claude) pensam na nuvem, e o
+  pedaço de memória da conversa sai do PC. Depois de 10 min sem conversa ele volta para a base.
+
 ## Espelhar o S10+ no PC (scrcpy, Wi-Fi)
 Depois de cada reinício do celular, ligue o cabo uma vez e rode `adb tcpip 5555`. Depois:
 `scrcpy -s 192.168.3.6:5555 --window-title "S10+ Painel" --max-size 1280 --no-audio --max-fps 30`

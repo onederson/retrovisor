@@ -1,13 +1,15 @@
 // Vendel: o bichinho da tela 8. Cada janela (sessao) do Claude Code vira um Vendel que mostra o que
 // ela esta fazendo. Os dados chegam pelo WebSocket em dados.mini (server/mini.py) e o app.js repassa
-// com window.Vendel.atualizar(mini). Sem toque por 2 min, o painel vem sozinho para esta tela.
+// com window.Vendel.atualizar(mini, dados). Sem toque por 2 min, o painel vem sozinho para esta tela.
+// Ele tambem tem humor (server/humor.py), conversa por voz e faz perguntas para melhorar a memoria
+// (cerebro do Vendel, projeto Vendel, via /vendel/* em server/cerebro.py).
 (() => {
   'use strict';
 
   const G = {
     corpo: '#0C120E', sombra: '#050806', brilho: '#2B3A30', borda: '#1C6B28',
     luz: '#5CFF4A', forte: '#D2FFC4', fraca: '#1F8A2C', w: '#F2FFF0', yel: '#F2E14E',
-    tinta: '#061008', coracao: '#FF6B9A'
+    tinta: '#061008', coracao: '#FF6B9A', gota: '#7FC8FF'
   };
   const ATIVOS = new Set(['pensando', 'digitando', 'lendo', 'executando', 'delegando', 'trabalhando']);
   const ROTULO = {
@@ -15,6 +17,7 @@
     executando: 'rodando comando', delegando: 'chamou ajudante', trabalhando: 'trabalhando',
     precisa: 'precisa de você', concluido: 'terminou!', dormindo: 'dormindo'
   };
+  const HUMOR_ROTULO = { animado: 'animado', curioso: 'curioso', tranquilo: 'tranquilo', sonolento: 'com sono', carente: 'carente' };
   const REPOUSO_MS = 120000;   // sem toque: o painel vem para o Vendel
   const DORMIR_MS = 600000;    // sem nada acontecendo: ele dorme
   const MAX_VISIVEIS = 4;
@@ -27,10 +30,22 @@
   const rotulosEl = secao.querySelector('.vendel-rotulos');
   const resumoEl = secao.querySelector('.vendel-resumo');
   const horaEl = secao.querySelector('.vendel-hora');
+  const falaEl = secao.querySelector('.vendel-fala');
+  const perguntaEl = secao.querySelector('.vendel-pergunta');
+  const digitarEl = secao.querySelector('.vendel-digitar');
+  const painelEl = secao.querySelector('.vendel-painel');
   const faixa = document.getElementById('vendel-faixa');
 
+  const guardado = (chave, padrao) => { try { return localStorage.getItem(chave) ?? padrao; } catch (e) { return padrao; } };
+  const guardar = (chave, valor) => { try { localStorage.setItem(chave, valor); } catch (e) {} };
+  const enviarWs = (obj) => { if (window.painelEnviar) window.painelEnviar(obj); };
+  function urlPainel(rota) {
+    const t = new URLSearchParams(location.search).get('t');
+    return t ? `${rota}${rota.includes('?') ? '&' : '?'}t=${encodeURIComponent(t)}` : rota;
+  }
+
   // ---------- grade de pixels ----------
-  let W = 0, H = 0, escala = 6, base = 40;
+  let W = 0, H = 0, escala = 6, base = 30;
   function dimensionar() {
     const r = secao.getBoundingClientRect();
     if (!r.width || !r.height) return false;
@@ -97,7 +112,7 @@
     const ach = p.dorme;
     const fy = (y) => (ach && y < 6 ? Math.round(6 + (y - 6) / 2.2) : y);
     for (let y = -14; y <= 10; y++) {
-      const balanco = p.balanca && y < -4 ? Math.round(Math.sin(t * 2.5 + y * 0.35 + p.fase) * 0.7) : 0;
+      const balanco = p.balanca && y < -4 ? Math.round(Math.sin(t * p.velBalanco + y * 0.35 + p.fase) * 0.7) : 0;
       for (let x = -13; x <= 13; x++) {
         if (!dentro(x, y, ach)) continue;
         const borda = !dentro(x - 1, y, ach) || !dentro(x + 1, y, ach) || !dentro(x, y - 1, ach) || !dentro(x, y + 1, ach);
@@ -130,10 +145,15 @@
     }
 
     const ey = cy + fy(-6);
-    [cx - 6, cx + 3].forEach((x, i) => {
+    if (p.vendado && !ach) {  // modo cego: venda nos olhos (a camera esta desligada)
+      P(cx - 10, ey - 1, 21, 4, G.borda); P(cx - 9, ey, 19, 2, '#123d19');
+      P(cx + 10, ey, 2, 1, G.borda); P(cx + 11, ey + 1, 2, 2, G.borda); P(cx + 12, ey + 3, 1, 2, G.borda);
+    }
+    if (!p.vendado || ach) [cx - 6, cx + 3].forEach((x, i) => {
       if (p.lupa && i === 1) return;
       const lx = p.lx, ly = p.ly;
       if (p.eyes === 'closed') P(x, ey + 2, 4, 1, G.fraca);
+      else if (p.eyes === 'sleepy') { P(x, ey + 1, 4, 1, G.fraca); P(x, ey + 2, 4, 1, G.luz); }
       else if (p.eyes === 'happy') { P(x, ey + 2, 1, 1, G.luz); P(x + 1, ey + 1, 2, 1, G.luz); P(x + 3, ey + 2, 1, 1, G.luz); }
       else if (p.eyes === 'wide') { P(x, ey - 1, 4, 4, G.luz); P(x, ey - 1, 1, 1, G.w); P(x + 1, ey, 2, 2, G.forte); }
       else { P(x + lx, ey + ly, 4, 3, G.luz); P(x + lx, ey + ly, 1, 1, G.w); P(x + 2 + lx, ey + 1 + ly, 1, 1, G.forte); }
@@ -141,6 +161,7 @@
     const my = cy + fy(-1);
     if (p.mouth === 'smile') { P(cx - 2, my - 1, 1, 1, G.luz); P(cx - 1, my, 3, 1, G.luz); P(cx + 2, my - 1, 1, 1, G.luz); }
     if (p.mouth === 'open') P(cx - 1, my - 1, 2, 2, G.luz);
+    if (p.mouth === 'big') { P(cx - 2, my - 1, 4, 2, G.luz); P(cx - 1, my, 2, 1, G.tinta); }
   }
 
   // ---------- o que o corpo vira ----------
@@ -197,10 +218,29 @@
       for (let i = 0; i < n; i++) P(cx - 4 + i * 3, cy - 22, 2, 2, G.luz);
     }
   }
-  function balaoExclamacao(cx, cy) {
-    P(cx - 3, cy - 28, 7, 9, G.yel); P(cx - 4, cy - 27, 9, 7, G.yel);
-    P(cx - 1, cy - 19, 3, 1, G.yel); P(cx, cy - 18, 1, 1, G.yel);
-    P(cx, cy - 26, 1, 4, G.tinta); P(cx, cy - 21, 1, 1, G.tinta);
+  function balaoSinal(cx, cy, sinal) {
+    const cor = sinal === '!' ? G.yel : G.luz;
+    P(cx - 3, cy - 28, 7, 9, cor); P(cx - 4, cy - 27, 9, 7, cor);
+    P(cx - 1, cy - 19, 3, 1, cor); P(cx, cy - 18, 1, 1, cor);
+    if (sinal === '!') { P(cx, cy - 26, 1, 4, G.tinta); P(cx, cy - 21, 1, 1, G.tinta); }
+    else { P(cx - 1, cy - 26, 3, 1, G.tinta); P(cx + 1, cy - 25, 1, 1, G.tinta); P(cx, cy - 24, 1, 1, G.tinta); P(cx, cy - 21, 1, 1, G.tinta); }
+  }
+  function ondasSom(cx, cy, t) {
+    const f = Math.floor(t * 6) % 3;
+    for (let i = 0; i <= f; i++) {
+      const x = cx + 12 + i * 2;
+      P(x, cy - 8 - i, 1, 1, G.luz); P(x + 1, cy - 7 - i, 1, 3 + i * 2, G.luz); P(x, cy - 3 + i, 1, 1, G.luz);
+    }
+  }
+  function gotas(cx, cy, t, n) {
+    for (let i = 0; i < n; i++) {
+      const f = ((t * 0.8 + i * 0.5) % 1);
+      const x = cx + (i ? -10 : 9), y = cy - 12 + Math.round(f * 8);
+      const alfa = ctx.globalAlpha;
+      ctx.globalAlpha = alfa * (1 - f * 0.6);
+      P(x, y, 1, 2, G.gota); P(x, y + 2, 1, 1, '#BFE4FF');
+      ctx.globalAlpha = alfa;
+    }
   }
   function confete(cx, cy, t, largura) {
     for (let i = 0; i < 14; i++) {
@@ -230,27 +270,82 @@
     ctx.globalAlpha = alfa;
   }
 
+  // ---------- aura das formas do Megabrain ----------
+  const OURO = { luz: '#FFD54A', forte: '#FFF3B0', fraca: '#B8860B', borda: '#8A6A10' };
+  function trocarPaleta(nova) {
+    const antes = {};
+    for (const k of Object.keys(nova)) { antes[k] = G[k]; G[k] = nova[k]; }
+    return antes;
+  }
+  // nivel 1: brilho verde fraco; 2: chama verde forte; 3: chama dourada com faiscas
+  function aura(cx, cy, t, nivel, achata) {
+    const raio = nivel >= 2 ? 2 : 1;
+    const dens = [0, 0.3, 0.5, 0.65][nivel];
+    const cor = nivel === 3 ? '#FFC93C' : (nivel === 2 ? G.luz : G.fraca);
+    const quadro = Math.floor(t * 8);
+    const alfa = ctx.globalAlpha;
+    ctx.globalAlpha = alfa * (nivel === 1 ? 0.5 : 0.8);
+    for (let y = -17; y <= 11; y++) for (let x = -16; x <= 16; x++) {
+      if (dentro(x, y, achata)) continue;
+      let perto = false;
+      for (let dy = -raio; dy <= raio && !perto; dy++) for (let dx = -raio; dx <= raio; dx++) {
+        if (dx * dx + dy * dy <= raio * raio + 1 && dentro(x + dx, y + dy, achata)) { perto = true; break; }
+      }
+      if (!perto) continue;
+      if (ruido(x * 7, y * 13 + quadro) < dens) P(cx + x, cy + y - (y < -6 ? quadro % 2 : 0), 1, 1, cor);
+    }
+    if (nivel === 3) for (let i = 0; i < 4; i++) {
+      const f = ((t * 0.9 + i / 4) % 1);
+      P(cx - 12 + ((i * 7) % 25), cy + 6 - Math.round(f * 24), 1, 1, f < 0.7 ? '#FFF3B0' : '#FFC93C');
+    }
+    ctx.globalAlpha = alfa;
+  }
+
+  // ---------- estado de vida (humor) e interacao ----------
+  let humor = { estado: 'tranquilo', extras: [], motivo: '' };
+  let vida = {};
+  let especial = null, especialAte = 0; // 'ouvindo' | 'falando' | 'perguntando' | 'pensandoVoz' no Vendel principal
+  function marcarEspecial(nome, ms) { especial = nome; especialAte = nome ? Date.now() + (ms || 60000) : 0; }
+
   // ---------- um Vendel num quadro ----------
-  function desenhar(v, t, agora, slotW) {
-    const sit = v.mostra;
+  function desenhar(v, t, agora, slotW, principal) {
+    let sit = v.mostra;
+    const esp = principal && especial && agora < especialAte ? especial : null;
+    if (esp && !ATIVOS.has(sit) && sit !== 'precisa') sit = esp;
     let cx = Math.round(v.cx), cy = base;
-    const p = { eyes: 'open', lx: 0, ly: 0, armL: 'down', armR: 'down', mouth: 'none',
-                luzes: 0, velPulso: 4, balanca: false, dorme: false, lupa: false, fase: v.fase };
+    const p = { eyes: 'open', lx: 0, ly: 0, armL: 'down', armR: 'down', mouth: 'none', luzes: 0, velPulso: 4,
+                balanca: false, velBalanco: 2.5, dorme: false, lupa: false, fase: v.fase };
     const tt = t + v.fase;
     const pisca = (tt % 3.4) < 0.15;
     let alfa = 1;
+    const hEst = humor.estado;
     switch (sit) {
       case 'ocioso': {
-        const amp = Math.max(0, Math.min(8, slotW / 2 - 14));
+        const parado = hEst === 'carente' || hEst === 'sonolento';
+        const amp = parado ? 0 : Math.max(0, Math.min(8, slotW / 2 - 14));
         cx += Math.round(Math.sin(tt * 0.5) * amp);
         const vel = Math.cos(tt * 0.5);
         p.lx = amp && Math.abs(vel) >= 0.2 ? Math.sign(vel) : 0;
         p.balanca = true; p.mouth = 'smile';
         if (pisca) p.eyes = 'closed';
         if ((tt % 7) > 6) p.ly = -1;
+        if (hEst === 'animado') {
+          p.velPulso = 9; p.velBalanco = 5;
+          if ((tt % 4) < 0.7) { cy -= Math.round(Math.abs(Math.sin(tt * 9)) * 2); p.eyes = 'happy'; }
+        } else if (hEst === 'curioso') {
+          p.lx = Math.floor(tt / 1.5) % 2 ? 1 : -1; if ((tt % 5) < 1) p.ly = -1;
+        } else if (hEst === 'sonolento') {
+          p.balanca = false; p.velPulso = 2; p.mouth = 'none';
+          p.eyes = (tt % 6) < 4.5 ? 'sleepy' : 'open';
+          if ((tt % 9) < 1.3) { p.mouth = 'big'; p.eyes = 'closed'; }
+        } else if (hEst === 'carente') {
+          p.lx = 0; p.ly = 0; p.mouth = 'none';
+          if ((tt % 15) < 2) p.armR = Math.floor(tt * 4) % 2 ? 'up' : 'mid';
+        }
+        if ((humor.extras || []).includes('calor')) p.armL = Math.floor(tt * 6) % 2 ? 'up' : 'mid';
         break;
       }
-      case 'pensando':
+      case 'pensando': case 'pensandoVoz':
         p.lx = 1; p.ly = -1; p.armR = 'mid'; p.velPulso = 12; cy += Math.floor(tt) % 2;
         if (pisca) p.eyes = 'closed';
         break;
@@ -267,6 +362,12 @@
         cy -= Math.round(Math.abs(Math.sin(tt * 5)) * 3); break;
       case 'dormindo':
         p.eyes = 'closed'; p.dorme = true; p.velPulso = 1.5; p.armL = p.armR = 'hide'; alfa = 0.6; break;
+      case 'ouvindo':
+        p.eyes = 'wide'; p.ly = -1; p.velPulso = 16; p.armR = 'mid'; break;
+      case 'falando':
+        p.mouth = Math.floor(tt * 7) % 2 ? 'open' : 'smile'; p.velPulso = 8; p.armR = Math.floor(tt * 2) % 2 ? 'mid' : 'down'; break;
+      case 'perguntando':
+        p.eyes = 'wide'; p.ly = -1; p.armR = 'up'; p.velPulso = 6; break;
     }
     const carinho = v.carinhoAte > agora ? 1 - (v.carinhoAte - agora) / 1400 : -1;
     if (carinho >= 0 && sit !== 'dormindo') {
@@ -283,24 +384,39 @@
 
     const largo = slotW >= 56;
     if (sit === 'concluido') confete(Math.round(v.cx), base, t, Math.min(40, Math.floor(slotW)));
+    p.vendado = principal && cego;
+    const nivelForma = principal ? forma : 0;
+    const transformando = principal && agora < transformandoAte;
+    if (transformando) p.luzes = Math.floor(t * 10) % 2;
+    if (nivelForma > 0 || transformando) aura(cx, cy, t, Math.max(nivelForma, transformando ? 3 : 0), p.dorme);
+    const original = nivelForma === 3 ? trocarPaleta(OURO) : null;  // forma suprema: circuitos dourados
     ctx.globalAlpha = alfa;
     corpo(p, t);
     ctx.globalAlpha = 1;
+    if (original) trocarPaleta(original);
     if (sit === 'digitando') teclado(cx, cy, t);
     if (sit === 'lendo') olhoLupa(cx, cy, t, largo ? 12 : 5);
     if (sit === 'executando' || sit === 'trabalhando') engrenagem(cx + 16, cy + 1, t);
     if (sit === 'delegando') ajudante(cx, cy, t);
-    if (sit === 'pensando') balaoPensando(cx, cy, t, largo ? 'direita' : 'cima');
-    if (sit === 'precisa' && Math.floor(t * 2.5) % 3 !== 2) balaoExclamacao(cx, cy);
+    if (sit === 'pensando' || sit === 'pensandoVoz') balaoPensando(cx, cy, t, largo ? 'direita' : 'cima');
+    if (sit === 'precisa' && Math.floor(t * 2.5) % 3 !== 2) balaoSinal(cx, cy, '!');
+    if (sit === 'perguntando') balaoSinal(cx, cy, '?');
+    if (sit === 'ouvindo') ondasSom(cx, cy, t);
     if (sit === 'concluido') visto(Math.round(v.cx), base);
     if (sit === 'dormindo') zzz(cx, cy, t);
+    if (sit === 'ocioso') {
+      const ex = humor.extras || [];
+      const n = (ex.includes('cansado') ? 1 : 0) + (ex.includes('calor') ? 1 : 0);
+      if (n) gotas(cx, cy, t, n);
+    }
     if (carinho >= 0) coracao(cx, cy, carinho);
     mascara = 1;
   }
 
   // ---------- estado vindo do servidor ----------
-  const vendels = new Map(); // id -> {dados, cx, nasc, morte, fase, semente, carinhoAte, estadoAnterior}
-  let resumo = { concluidas: 0, trabalhando_s: 0 };
+  const vendels = new Map(); // id -> {dados, cx, nasc, morte, fase, semente, carinhoAte, ativoDesde}
+  let resumo = { concluidas: 0, trabalhando_s: 0, por_projeto: {} };
+  let ultimoDados = null;
   let ultimaMudanca = Date.now();
   let assinatura = '';
   let ultimoToque = Date.now();
@@ -309,12 +425,16 @@
     let h = 0;
     for (const ch of id) h = (Math.imul(h, 31) + ch.charCodeAt(0)) | 0;
     return { id, dados, cx: null, nasc: Date.now(), morte: null, fase: (Math.abs(h) % 100) / 17,
-             semente: h || 7, carinhoAte: 0, mostra: dados.estado };
+             semente: h || 7, carinhoAte: 0, mostra: dados.estado,
+             ativoDesde: ATIVOS.has(dados.estado) ? Date.now() : null };
   }
 
-  function atualizar(mini) {
+  function atualizar(mini, dados) {
+    if (dados) ultimoDados = dados;
     if (!mini || !Array.isArray(mini.sessoes)) return;
     resumo = mini.hoje || resumo;
+    if (mini.humor) humor = mini.humor;
+    if (mini.vida) vida = mini.vida;
     const agora = Date.now();
     const sessoes = mini.sessoes.slice(0, 20);
     const assin = sessoes.map((s) => s.id + ':' + s.estado).join('|');
@@ -332,7 +452,6 @@
       v.dados = s;
       if (s.estado !== antes) avisar(v, antes, s.estado);
     }
-    // sem nenhuma janela: o Vendel fica sozinho
     if (!sessoes.length) {
       vistos.add('_eu');
       if (!vendels.has('_eu') || vendels.get('_eu').morte) {
@@ -342,6 +461,160 @@
     for (const v of vendels.values()) {
       if (!vistos.has(v.id) && !v.morte) v.morte = agora;
     }
+    if (dados) conferirSaude(dados);
+  }
+
+  // ---------- formas, privacidade e voz ----------
+  // Formas do Megabrain: base (Ollama pequeno) -> 2 (Ollama grande) -> 3 (agy, nuvem) -> suprema (Claude, nuvem).
+  // Cansa: 10 min sem conversa numa forma alta e ele volta sozinho para a base.
+  const FORMAS = [
+    { modo: 'local', nome: 'forma: base' },
+    { modo: 'local2', nome: 'forma 2' },
+    { modo: 'agy', nome: 'forma 3 · nuvem' },
+    { modo: 'claude', nome: 'forma suprema · Claude' }
+  ];
+  let forma = Math.min(3, Math.max(0, Number(guardado('vendel_forma', '0')) || 0));
+  let formaUsoEm = Date.now();
+  let transformandoAte = 0;
+  let vozLigada = guardado('vendel_voz', '1') === '1';
+  let silencio = guardado('vendel_silencio', '0') === '1';
+  let mudo = guardado('vendel_mudo', '0') === '1';   // microfone desligado de verdade
+  let cego = guardado('vendel_cego', '0') === '1';   // camera desligada de verdade
+  const noite = () => { const h = new Date().getHours(); return h >= 23 || h < 7; };
+  const podeFalarSozinho = () => vozLigada && !silencio && !noite() && presente();
+
+  // A voz vem do PC (vozes do Windows): o navegador do painel nao tem voz propria.
+  let audioAtual = null;
+  function falarAlto(texto, forcar) {
+    if (!texto || (!forcar && !vozLigada)) return;
+    try {
+      if (audioAtual) audioAtual.pause();
+      const a = new Audio(urlPainel('/vendel/voz?texto=' + encodeURIComponent(texto.slice(0, 1500))));
+      audioAtual = a;
+      a.onplay = () => marcarEspecial('falando', 60000);
+      a.onended = a.onerror = () => { if (especial === 'falando') marcarEspecial(null); };
+      a.play().catch(() => {});
+    } catch (e) {}
+  }
+  const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // ---------- camera: presenca (olhadinha a cada 10 s) e foto ----------
+  // Nenhuma imagem de presenca sai do celular: so compara dois quadrinhos 32x24 em tons de cinza.
+  let presenteAte = Date.now(), quadroAnterior = null, cameraFalhou = false, ultimoSinalPresenca = 0;
+  function presente() { return cego || cameraFalhou || Date.now() - Math.max(presenteAte, ultimoToque) < 240000; }
+  async function abrirCamera(w, h) {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: w }, height: { ideal: h } }, audio: false });
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.srcObject = stream;
+    await v.play();
+    return { stream, v };
+  }
+  const fecharCamera = (c) => { if (c) c.stream.getTracks().forEach((t) => t.stop()); };
+  function cinza(v) {
+    const c = document.createElement('canvas'); c.width = 32; c.height = 24;
+    const g = c.getContext('2d'); g.drawImage(v, 0, 0, 32, 24);
+    const d = g.getImageData(0, 0, 32, 24).data, out = new Uint8Array(32 * 24);
+    for (let i = 0; i < out.length; i++) out[i] = (d[i * 4] * 3 + d[i * 4 + 1] * 6 + d[i * 4 + 2]) / 10;
+    return out;
+  }
+  const diferenca = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]); return s / a.length; };
+  async function olhadinha() {
+    if (cego || cameraFalhou || document.hidden || !navigator.mediaDevices) return;
+    let cam = null;
+    try {
+      cam = await abrirCamera(160, 120);
+      await espera(400);
+      const a = cinza(cam.v);
+      await espera(500);
+      const b = cinza(cam.v);
+      const mov = Math.max(diferenca(a, b), quadroAnterior ? diferenca(quadroAnterior, b) : 0);
+      quadroAnterior = b;
+      if (mov > 7) presencaDetectada();
+    } catch (e) {
+      cameraFalhou = true; // sem permissao ou sem camera: para de tentar
+    } finally { fecharCamera(cam); }
+  }
+  function presencaDetectada() {
+    const agora = Date.now();
+    const voltou = agora - Math.max(presenteAte, ultimoToque) > 20 * 60000;
+    presenteAte = agora;
+    if (agora - ultimoSinalPresenca > 60000) { ultimoSinalPresenca = agora; enviarWs({ tipo: 'toque' }); }
+    if (voltou) {
+      const v = [...vendels.values()].find((x) => !x.morte);
+      if (v) v.carinhoAte = agora + 1400;
+      ultimaMudanca = agora;
+      if (vozLigada && !silencio && !noite()) falarAlto('Oi! Que bom que você voltou.');
+    }
+  }
+  setInterval(olhadinha, 10000);
+  async function tirarFoto() {
+    const cam = await abrirCamera(640, 480);
+    try {
+      await espera(700);
+      const c = document.createElement('canvas');
+      c.width = cam.v.videoWidth || 640; c.height = cam.v.videoHeight || 480;
+      c.getContext('2d').drawImage(cam.v, 0, 0, c.width, c.height);
+      return c.toDataURL('image/jpeg', 0.75);
+    } finally { fecharCamera(cam); }
+  }
+
+  // ---------- microfone: grava WAV 16 kHz e o PC transcreve ----------
+  let gravacao = null;
+  function wav16k(partes, taxa) {
+    let total = 0; for (const p of partes) total += p.length;
+    const junto = new Float32Array(total); let o = 0;
+    for (const p of partes) { junto.set(p, o); o += p.length; }
+    const passo = taxa / 16000, n = Math.floor(total / passo);
+    const buf = new ArrayBuffer(44 + n * 2), dv = new DataView(buf);
+    const txt = (pos, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(pos + i, s.charCodeAt(i)); };
+    txt(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); txt(8, 'WAVE'); txt(12, 'fmt ');
+    dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+    dv.setUint32(24, 16000, true); dv.setUint32(28, 32000, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+    txt(36, 'data'); dv.setUint32(40, n * 2, true);
+    for (let i = 0; i < n; i++) {
+      const s = Math.max(-1, Math.min(1, junto[Math.floor(i * passo)]));
+      dv.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+    return new Blob([buf], { type: 'audio/wav' });
+  }
+  function pararGravacao() {
+    const g = gravacao;
+    if (!g) return;
+    gravacao = null;
+    try { g.proc.disconnect(); g.src.disconnect(); } catch (e) {}
+    g.stream.getTracks().forEach((t) => t.stop()); // o microfone fecha na hora
+    try { g.ac.close(); } catch (e) {}
+    g.fim(g.falou ? wav16k(g.partes, g.ac.sampleRate) : null);
+  }
+  async function gravar(fim) {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const src = ac.createMediaStreamSource(stream);
+    const proc = ac.createScriptProcessor(4096, 1, 1);
+    const g = { stream, ac, src, proc, partes: [], falou: false, fim };
+    const inicio = Date.now(); let quietoDesde = null;
+    proc.onaudioprocess = (e) => {
+      if (gravacao !== g) return;
+      const d = e.inputBuffer.getChannelData(0);
+      g.partes.push(new Float32Array(d));
+      let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i] * d[i];
+      const rms = Math.sqrt(s / (d.length / 4));
+      if (rms > 0.02) { g.falou = true; quietoDesde = null; } else if (g.falou && !quietoDesde) quietoDesde = Date.now();
+      if ((g.falou && quietoDesde && Date.now() - quietoDesde > 1400) || Date.now() - inicio > 15000) pararGravacao();
+    };
+    src.connect(proc); proc.connect(ac.destination);
+    gravacao = g;
+  }
+  let falaAte = 0;
+  function mostrarFala(texto, ms) {
+    if (!falaEl) return;
+    falaEl.textContent = texto;
+    falaEl.hidden = false;
+    falaAte = Date.now() + (ms || 8000);
+  }
+  function aviso(texto) {
+    if (podeFalarSozinho()) falarAlto(texto);
+    if (naTelaVendel()) mostrarFala(texto, 6000);
   }
 
   // ---------- avisos fora da tela do Vendel ----------
@@ -357,11 +630,17 @@
   function esconderFaixa() { if (faixa) faixa.hidden = true; faixaAte = 0; }
   function avisar(v, antes, depois) {
     const nome = v.dados.projeto || 'Claude';
+    if (ATIVOS.has(depois) && !ATIVOS.has(antes)) v.ativoDesde = Date.now();
     if (depois === 'precisa') {
-      vibrar([80, 60, 80]);
+      if (!silencio) vibrar([80, 60, 80]);
       if (!naTelaVendel()) mostrarFaixa(`${nome} precisa de você`, 'precisa', 0);
+      aviso(`${nome} precisa de você`);
     } else if (depois === 'concluido' && ATIVOS.has(antes)) {
+      const trabalhou = v.ativoDesde ? (Date.now() - v.ativoDesde) / 1000 : 0;
+      v.ativoDesde = null;
       if (!naTelaVendel()) mostrarFaixa(`${nome} terminou`, 'ok', 6000);
+      if (trabalhou >= 120) aviso(`Terminei no ${nome}`);
+      if (Date.now() - ultimoToque < 600000) setTimeout(() => talvezPerguntar(), 8000);
     }
   }
   function conferirFaixa() {
@@ -373,6 +652,230 @@
     } else if (Date.now() > faixaAte) esconderFaixa();
   }
   if (faixa) faixa.addEventListener('click', () => { esconderFaixa(); irParaVendel(); });
+
+  // uso alto e GPU quente: avisa uma vez quando passa do limite
+  let avisouUso = false, avisoGpuEm = 0;
+  function conferirSaude(dados) {
+    try {
+      const lim = ((dados.claude_usage || {}).limites || []).find((l) => String(l.nome || '').startsWith('Sessão'));
+      const uso = lim ? Number(lim.usado_pct) : null;
+      if (uso != null && uso >= 80 && !avisouUso) { avisouUso = true; aviso(`Sua janela de 5 horas do Claude passou de ${Math.round(uso)}%`); }
+      if (uso != null && uso < 70) avisouUso = false;
+      const gpu = (dados.hardware || {}).gpu_temp;
+      if (gpu != null && gpu >= 85 && Date.now() - avisoGpuEm > 1800000) { avisoGpuEm = Date.now(); aviso(`A placa de vídeo está a ${Math.round(gpu)} graus`); }
+    } catch (e) {}
+  }
+
+  // ---------- conversa (microfone) ----------
+  // vazioOk: sem fala, chama depois('') (ex.: foto sem pergunta = "o que voce esta vendo?")
+  async function ouvir(depois, vazioOk) {
+    if (gravacao) { pararGravacao(); return; }       // segundo toque no microfone = terminei de falar
+    if (mudo || !navigator.mediaDevices) { pedirTexto(depois); return; }
+    try {
+      await gravar(async (wav) => {
+        if (especial === 'ouvindo') marcarEspecial(null);
+        if (!wav) { if (vazioOk) depois(''); else mostrarFala('Não ouvi nada.', 3000); return; }
+        marcarEspecial('pensandoVoz', 120000);
+        mostrarFala('…', 120000);
+        try {
+          const r = await fetch(urlPainel('/vendel/ouvir'), { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
+          const d = await r.json();
+          marcarEspecial(null);
+          if (d && d.texto) depois(d.texto);
+          else if (vazioOk) depois('');
+          else mostrarFala('Não entendi. Toque no microfone e fale de novo.', 4000);
+        } catch (e) { marcarEspecial(null); mostrarFala('Meu cérebro está desligado agora.', 5000); }
+      });
+      marcarEspecial('ouvindo', 16000);
+      mostrarFala('Pode falar…', 16000);
+    } catch (e) {
+      marcarEspecial(null);
+      mostrarFala('Sem acesso ao microfone. Pode escrever.', 3000);
+      pedirTexto(depois);
+    }
+  }
+  let aoDigitar = null;
+  function pedirTexto(depois) {
+    if (!digitarEl) return;
+    aoDigitar = depois;
+    digitarEl.hidden = false;
+    const campo = digitarEl.querySelector('input');
+    campo.value = '';
+    setTimeout(() => campo.focus(), 50);
+  }
+  if (digitarEl) {
+    const campo = digitarEl.querySelector('input');
+    const enviar = () => {
+      const txt = campo.value.trim();
+      digitarEl.hidden = true;
+      campo.blur();
+      if (txt && aoDigitar) aoDigitar(txt);
+      aoDigitar = null;
+    };
+    digitarEl.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); enviar(); });
+    digitarEl.querySelector('.vendel-cancelar').addEventListener('click', () => { digitarEl.hidden = true; aoDigitar = null; });
+  }
+
+  async function conversar(texto) {
+    mostrarFala(`“${texto}”`, 240000);
+    marcarEspecial('pensandoVoz', 240000);
+    formaUsoEm = Date.now();
+    try {
+      const r = await fetch(urlPainel('/vendel/falar'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto, modo: FORMAS[forma].modo })
+      });
+      const d = await r.json();
+      marcarEspecial(null);
+      if (!r.ok || !d.resposta) throw new Error('sem resposta');
+      mostrarFala(d.resposta, Math.max(8000, d.resposta.length * 90));
+      falarAlto(d.resposta, true);
+    } catch (e) {
+      marcarEspecial(null);
+      mostrarFala('Meu cérebro está desligado agora. Confira se o PC está ligado.', 6000);
+    }
+  }
+
+  // ---------- perguntas para melhorar a memoria ----------
+  let perguntaAtual = null, ultimaPerguntaEm = 0;
+  async function talvezPerguntar() {
+    if (silencio || noite() || perguntaAtual || Date.now() - ultimaPerguntaEm < 30 * 60000) return;
+    ultimaPerguntaEm = Date.now();
+    try {
+      const d = await (await fetch(urlPainel('/vendel/pergunta'))).json();
+      if (d && d.pergunta) mostrarPergunta(d.pergunta);
+    } catch (e) {}
+  }
+  function mostrarPergunta(p) {
+    if (!perguntaEl) return;
+    perguntaAtual = p;
+    perguntaEl.querySelector('.vendel-pergunta-texto').textContent = p.texto;
+    perguntaEl.hidden = false;
+    marcarEspecial('perguntando', 180000);
+    if (naTelaVendel() || podeFalarSozinho()) falarAlto(p.texto);
+  }
+  function fecharPergunta() {
+    if (perguntaEl) perguntaEl.hidden = true;
+    perguntaAtual = null;
+    if (especial === 'perguntando') marcarEspecial(null);
+  }
+  async function responderPergunta(texto) {
+    const p = perguntaAtual;
+    fecharPergunta();
+    if (!p) return;
+    try {
+      await fetch(urlPainel('/vendel/responder'), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, texto })
+      });
+      mostrarFala('Anotado! Obrigado.', 4000);
+      falarAlto('Anotado! Obrigado.');
+    } catch (e) { mostrarFala('Não consegui anotar agora.', 4000); }
+  }
+  if (perguntaEl) {
+    perguntaEl.querySelector('.vendel-responder').addEventListener('click', () => ouvir(responderPergunta));
+    perguntaEl.querySelector('.vendel-depois').addEventListener('click', fecharPergunta);
+  }
+
+  // ---------- botoes ----------
+  function desenharBotoes() {
+    const b = (cls) => secao.querySelector(cls);
+    const marcar = (el, sim, txt) => { if (!el) return; el.setAttribute('aria-pressed', String(sim)); if (txt != null) el.textContent = txt; };
+    if (b('.vendel-forma')) { b('.vendel-forma').textContent = FORMAS[forma].nome; b('.vendel-forma').dataset.forma = String(forma); }
+    marcar(b('.vendel-voz'), vozLigada, vozLigada ? 'voz: ligada' : 'voz: desligada');
+    marcar(b('.vendel-silencio'), silencio, silencio ? 'não perturbe: sim' : 'não perturbe: não');
+    marcar(b('.vendel-mudo'), mudo);
+    marcar(b('.vendel-cego'), cego);
+    secao.classList.toggle('mudo', mudo);
+    secao.classList.toggle('cego', cego);
+  }
+  const clicar = (cls, fn) => { const el = secao.querySelector(cls); if (el) el.addEventListener('click', fn); };
+  clicar('.vendel-mic', () => {
+    if (audioAtual) { try { audioAtual.pause(); } catch (e) {} }
+    if (mudo) { mostrarFala('Estou de ouvidos tapados. Pode escrever, ou tire o mudo.', 3000); }
+    if (perguntaAtual) ouvir(responderPergunta); else ouvir(conversar);
+  });
+  clicar('.vendel-ver', async () => {
+    if (cego) { mostrarFala('Estou de olhos vendados. Tire a venda no botão do olho.', 4000); return; }
+    let foto;
+    try { foto = await tirarFoto(); } catch (e) { mostrarFala('Não consegui abrir a câmera.', 4000); return; }
+    mostrarFala('Tirei a foto. O que você quer saber?', 16000);
+    ouvir(async (pergunta) => {
+      marcarEspecial('pensandoVoz', 180000);
+      mostrarFala('Olhando…', 180000);
+      try {
+        const r = await fetch(urlPainel('/vendel/ver'), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imagem: foto, pergunta: pergunta || 'O que você está vendo?' })
+        });
+        const d = await r.json();
+        marcarEspecial(null);
+        foto = null; // a foto some da memoria do celular tambem
+        if (!d.resposta) throw new Error('sem resposta');
+        mostrarFala(d.resposta, Math.max(8000, d.resposta.length * 90));
+        falarAlto(d.resposta, true);
+      } catch (e) { marcarEspecial(null); mostrarFala('Não consegui olhar agora.', 4000); }
+    }, true);
+  });
+  clicar('.vendel-forma', () => {
+    forma = (forma + 1) % FORMAS.length;
+    formaUsoEm = Date.now();
+    transformandoAte = Date.now() + 1600;
+    guardar('vendel_forma', String(forma)); desenharBotoes();
+    vibrar(forma === 3 ? [40, 40, 40, 40, 120] : 30);
+    if (forma >= 2) mostrarFala('Nesta forma eu penso na nuvem: o pedacinho de memória da conversa sai do PC.', 5000);
+  });
+  clicar('.vendel-voz', () => { vozLigada = !vozLigada; guardar('vendel_voz', vozLigada ? '1' : '0'); desenharBotoes(); });
+  clicar('.vendel-silencio', () => { silencio = !silencio; guardar('vendel_silencio', silencio ? '1' : '0'); desenharBotoes(); });
+  clicar('.vendel-mudo', () => {
+    mudo = !mudo; guardar('vendel_mudo', mudo ? '1' : '0');
+    if (mudo && gravacao) { gravacao.falou = false; pararGravacao(); }
+    desenharBotoes();
+  });
+  clicar('.vendel-cego', () => {
+    cego = !cego; guardar('vendel_cego', cego ? '1' : '0');
+    if (!cego) cameraFalhou = false;
+    desenharBotoes();
+  });
+  // botoes e caixas nao contam como carinho nem abrem o resumo
+  secao.querySelectorAll('.vendel-controle').forEach((el) => {
+    el.addEventListener('pointerdown', (e) => e.stopPropagation());
+  });
+  desenharBotoes();
+
+  // ---------- resumo do dia (segurar o dedo) ----------
+  function duracao(s) {
+    if (s < 60) return `${Math.max(0, Math.round(s))} s`;
+    if (s < 3600) return `${Math.floor(s / 60)} min`;
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    return `${h}h${String(m).padStart(2, '0')}`;
+  }
+  function abrirPainel() {
+    if (!painelEl) return;
+    const projetos = Object.entries(resumo.por_projeto || {}).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const maior = projetos.length ? projetos[0][1] : 1;
+    const d = ultimoDados || {};
+    const claudeHoje = (d.claude || {}).hoje || {};
+    const custo = (d.financeiro || {}).claude_equiv_hoje_usd;
+    const tokens = (claudeHoje.input || 0) + (claudeHoje.output || 0) + (claudeHoje.cache_write || 0);
+    const fmt = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(1)} mi` : n >= 1e3 ? `${Math.round(n / 1e3)} mil` : String(n);
+    painelEl.innerHTML = `
+      <div class="vendel-painel-caixa">
+        <div class="vendel-painel-topo"><b>Hoje</b><span>nível ${vida.nivel || 1} · ${HUMOR_ROTULO[humor.estado] || 'tranquilo'}</span></div>
+        <div class="vendel-painel-numeros">
+          <div><b>${resumo.concluidas || 0}</b><span>tarefas</span></div>
+          <div><b>${duracao(resumo.trabalhando_s || 0)}</b><span>de Claude</span></div>
+          <div><b>${fmt(tokens)}</b><span>tokens</span></div>
+          <div><b>${custo != null ? '$' + Number(custo).toFixed(2) : '—'}</b><span>se fosse API</span></div>
+        </div>
+        <div class="vendel-painel-projetos">${projetos.map(([nome, s]) => `
+          <div class="vendel-barra"><span></span><i style="width:${Math.max(4, (s / maior) * 100)}%"></i><em>${duracao(s)}</em></div>`).join('') || '<p>Nenhum projeto hoje ainda.</p>'}
+        </div>
+        <p class="vendel-painel-motivo"></p>
+      </div>`;
+    painelEl.querySelectorAll('.vendel-barra span').forEach((el, i) => { el.textContent = projetos[i][0]; });
+    painelEl.querySelector('.vendel-painel-motivo').textContent = humor.motivo ? `Como estou: ${humor.motivo}.` : '';
+    painelEl.hidden = false;
+  }
+  if (painelEl) painelEl.addEventListener('click', () => { painelEl.hidden = true; });
 
   // ---------- navegacao e repouso ----------
   const container = document.getElementById('container-horizontal');
@@ -396,16 +899,37 @@
     if (apagar && apagar.classList.contains('ativo')) return false;
     return !naTelaVendel();
   }
-  const marcarToque = () => { ultimoToque = Date.now(); };
+  let toqueEnviadoEm = 0;
+  const marcarToque = () => {
+    ultimoToque = Date.now();
+    if (ultimoToque - toqueEnviadoEm > 30000) { toqueEnviadoEm = ultimoToque; enviarWs({ tipo: 'toque' }); }
+  };
   document.addEventListener('pointerdown', marcarToque, true);
   document.addEventListener('touchstart', marcarToque, { capture: true, passive: true });
   setInterval(() => {
     if (Date.now() - ultimoToque > REPOUSO_MS && podePular()) { irParaVendel(); ultimoToque = Date.now(); }
     conferirFaixa();
-  }, 3000);
+    if (falaEl && !falaEl.hidden && Date.now() > falaAte && especial !== 'falando') falaEl.hidden = true;
+    if (forma > 0 && Date.now() - formaUsoEm > 10 * 60000) {  // a transformacao cansa
+      forma = 0; guardar('vendel_forma', '0'); desenharBotoes();
+      if (naTelaVendel()) mostrarFala('Cansei… voltei para a forma base.', 4000);
+    }
+  }, 1000);
 
-  // carinho: tocar num Vendel
+  // toque curto num Vendel = carinho; segurar = resumo do dia
+  let segurar = null, inicioToque = null;
   secao.addEventListener('pointerdown', (e) => {
+    inicioToque = { x: e.clientX, y: e.clientY, t: Date.now() };
+    clearTimeout(segurar);
+    segurar = setTimeout(() => { inicioToque = null; abrirPainel(); }, 650);
+  });
+  secao.addEventListener('pointermove', (e) => {
+    if (inicioToque && Math.hypot(e.clientX - inicioToque.x, e.clientY - inicioToque.y) > 12) { clearTimeout(segurar); inicioToque = null; }
+  });
+  secao.addEventListener('pointerup', (e) => {
+    clearTimeout(segurar);
+    if (!inicioToque) return;
+    inicioToque = null;
     const r = canvas.getBoundingClientRect();
     if (!r.width) return;
     const x = (e.clientX - r.left) / (r.width / W) - ox;
@@ -415,19 +939,21 @@
       const d = Math.abs((v.cxDesenho ?? v.cx) - x);
       if (d < dist) { dist = d; melhor = v; }
     }
-    if (melhor) { melhor.carinhoAte = Date.now() + 1400; vibrar(15); }
+    if (melhor) {
+      melhor.carinhoAte = Date.now() + 1400; vibrar(15);
+      enviarWs({ tipo: 'carinho' });
+      setTimeout(() => talvezPerguntar(), 2500);
+    }
   });
+  secao.addEventListener('pointercancel', () => { clearTimeout(segurar); inicioToque = null; });
 
   // ---------- desenho ----------
   const rotulos = new Map(); // id -> div
-  function duracao(s) {
-    if (s < 60) return `${Math.max(0, Math.round(s))} s`;
-    if (s < 3600) return `${Math.floor(s / 60)} min`;
-    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-    return `${h}h${String(m).padStart(2, '0')}`;
-  }
   function textoRotulo(v, mostra) {
-    if (v.id === '_eu') return { nome: 'Vendel', linha: mostra === 'dormindo' ? 'dormindo' : 'nenhuma janela do Claude aberta' };
+    if (v.id === '_eu') {
+      const linha = mostra === 'dormindo' ? 'dormindo' : (HUMOR_ROTULO[humor.estado] || 'tranquilo');
+      return { nome: 'Vendel', linha };
+    }
     const desde = Date.parse(v.dados.desde || '');
     const ha = Number.isFinite(desde) ? ` · ${duracao((Date.now() - desde) / 1000)}` : '';
     const nome = (v.dados.tipo === 'ajudante' ? 'ajudante · ' : '') + (v.dados.projeto || '?');
@@ -448,7 +974,7 @@
     const t = agora / 1000;
     const relogio = Date.now();
     const hora = new Date().getHours();
-    const noite = hora >= 23 || hora < 6;
+    const madrugada = hora >= 23 || hora < 6;
 
     // OLED: a cena inteira passeia 2 px a cada minuto
     const minuto = Math.floor(relogio / 60000);
@@ -457,10 +983,10 @@
 
     const ativos = [...vendels.values()].filter((v) => !v.morte);
     const algumAtivo = ativos.some((v) => ATIVOS.has(v.dados.estado) || v.dados.estado === 'precisa');
+    const conversando = especial && relogio < especialAte;
     const parado = relogio - Math.max(ultimaMudanca, ultimoToque);
-    const dormir = !algumAtivo && (parado > DORMIR_MS || (noite && parado > REPOUSO_MS));
+    const dormir = !algumAtivo && !conversando && (parado > DORMIR_MS || (madrugada && parado > REPOUSO_MS));
 
-    // posicoes: cada um no centro da sua faixa (os que somem saem do calculo)
     const lista = ativos.slice(0, MAX_VISIVEIS);
     const slotW = W / Math.max(1, lista.length);
     lista.forEach((v, i) => {
@@ -474,10 +1000,9 @@
       if (v.cx == null) continue;
       if (!v.morte && !lista.includes(v)) continue;
       v.mostra = dormir && !ATIVOS.has(v.dados.estado) ? 'dormindo' : v.dados.estado;
-      desenhar(v, t, relogio, slotW);
+      desenhar(v, t, relogio, slotW, v === lista[0]);
     }
 
-    // rotulos em HTML (texto nitido), embaixo de cada um
     const presentes = new Set();
     for (const v of lista) {
       presentes.add(v.id);
@@ -510,7 +1035,7 @@
       if (horaEl.textContent !== txt) horaEl.textContent = txt;
     }
     camada.style.transform = `translate(${ox * escala}px, ${oy * escala}px)`;
-    secao.classList.toggle('noite', noite || dormir);
+    secao.classList.toggle('noite', (madrugada || dormir) && !conversando);
   }
 
   if ('IntersectionObserver' in window) {
@@ -522,5 +1047,5 @@
 
   atualizar({ sessoes: [], hoje: resumo });
   requestAnimationFrame(quadro);
-  window.Vendel = { atualizar, irPara: irParaVendel };
+  window.Vendel = { atualizar, irPara: irParaVendel, falar: falarAlto };
 })();

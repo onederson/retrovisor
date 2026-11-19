@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 import hmac
 import json
 import logging
@@ -8,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import config
+from . import cerebro, config, humor
 from .collectors import bloqueio, midia
 from .hub import Hub
 from .mini import Mini
@@ -34,6 +35,7 @@ except Exception as e:  # o painel funciona sem as acoes
 @asynccontextmanager
 async def ciclo(app: FastAPI):
     HUB.iniciar()
+    asyncio.get_running_loop().run_in_executor(None, cerebro.garantir_servico, CFG)  # cerebro do Vendel
     yield
     await HUB.parar()
 
@@ -164,6 +166,56 @@ async def mini_evento(request: Request):
     return {"ok": True}
 
 
+def calcular_humor(mini_snap: dict, hub_estado: dict, hora: int | None = None) -> dict | None:
+    try:
+        vida = mini_snap.get("vida") if isinstance(mini_snap, dict) else {}
+        if not isinstance(vida, dict):
+            vida = {}
+        hoje = mini_snap.get("hoje") if isinstance(mini_snap, dict) else {}
+        if not isinstance(hoje, dict):
+            hoje = {}
+
+        min_sem_toque = float(vida.get("min_sem_toque", 0.0))
+        min_sem_claude = float(vida.get("min_sem_claude", 0.0))
+        concluidas_hoje = int(hoje.get("concluidas", 0))
+        carinhos_hoje = int(vida.get("carinhos_hoje", 0))
+
+        uso_5h = None
+        try:
+            limites = (hub_estado.get("claude_usage") or {}).get("limites") or []
+            if isinstance(limites, list):
+                for item in limites:
+                    if isinstance(item, dict) and str(item.get("nome", "")).startswith("Sessão"):
+                        val = item.get("usado_pct")
+                        uso_5h = float(val) if val is not None else None
+                        break
+        except Exception:
+            uso_5h = None
+
+        gpu = None
+        try:
+            hw = hub_estado.get("hardware") or {}
+            if isinstance(hw, dict) and hw.get("gpu_temp") is not None:
+                gpu = float(hw["gpu_temp"])
+        except Exception:
+            gpu = None
+
+        if hora is None:
+            hora = datetime.now().astimezone().hour
+
+        return humor.calcular(
+            hora=hora,
+            min_sem_toque=min_sem_toque,
+            min_sem_claude=min_sem_claude,
+            concluidas_hoje=concluidas_hoje,
+            carinhos_hoje=carinhos_hoje,
+            uso_5h_pct=uso_5h,
+            gpu_temp=gpu,
+        )
+    except Exception:
+        return None
+
+
 @app.websocket("/ws")
 async def ws(sock: WebSocket):
     if not autorizado(sock.client.host if sock.client else None, _token(sock)):
@@ -174,8 +226,15 @@ async def ws(sock: WebSocket):
     async def receber():
         while True:
             msg = await sock.receive_json()
-            if msg.get("tipo") == "bateria":
+            if not isinstance(msg, dict):
+                continue
+            tipo = msg.get("tipo")
+            if tipo == "bateria":
                 HUB.bateria_browser = {k: msg.get(k) for k in ("nivel", "carregando")}
+            elif tipo == "carinho":
+                MINI.carinho()
+            elif tipo == "toque":
+                MINI.toque()
 
     leitor = asyncio.create_task(receber())
     try:
@@ -185,6 +244,10 @@ async def ws(sock: WebSocket):
             dados["energia"] = en["evento"]
             dados["energia_seq"] = en["seq"]
             dados["mini"] = MINI.snapshot()
+            try:
+                dados["mini"]["humor"] = calcular_humor(dados["mini"], HUB.estado)
+            except Exception:
+                pass
             mini_seq = MINI.seq
             await sock.send_json({"tipo": "estado", "dados": dados})
             # 1 pacote/s; um aviso de energia (PC indo dormir/desligar) sai na hora
@@ -198,4 +261,5 @@ async def ws(sock: WebSocket):
         leitor.cancel()
 
 
+app.include_router(cerebro.rotas(autorizado, _token))  # /vendel/*: conversa, voz, foto, perguntas
 app.mount("/static", StaticFiles(directory=WEB, check_dir=False), name="static")

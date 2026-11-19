@@ -1,8 +1,13 @@
 # Mini — o assistente que mora no S10+
 
-Status (2026-11-19): **fase 1 feita**. `server/mini.py`, `scripts/mini_hook.py`,
-`scripts/instalar_vendel.py`, `web/vendel.js` (tela 8), testes em `tests/test_mini.py`.
-Fases 2 e 3 e o cérebro ainda são plano.
+Status (2026-11-19): **fases 1, 2 e 3 e o cérebro feitos.**
+- Fase 1: `server/mini.py`, `scripts/mini_hook.py`, `scripts/instalar_vendel.py`, `web/vendel.js` (tela 8).
+- Fase 2: `server/humor.py` (humor, nível, carinho, toque), resumo do dia ao segurar o dedo.
+- Fase 3 e cérebro: projeto separado `C:/Users/Vendel/Desktop/Projetos/Vendel` (o Pestinha foi trocado por
+  um cérebro próprio). Ponte no painel: `server/cerebro.py` (`/vendel/*`), que também sobe o serviço.
+- Extras pedidos depois: câmera (presença + "olha isso"), botões mudo/cego, formas do Megabrain com aura.
+- Voz: o Fully não tem voz; o PC ouve (gemma4, ~1 s, com `think: false`) e fala (voz do Windows "Daniel").
+- Pendente por decisão do dono: ligar o porteiro do Ollama (`Vendel/scripts/porteiro.ps1 -Ligar`).
 
 Diferenças em relação ao plano abaixo, decididas na implementação:
 - `Notification` de ociosidade ("Claude is waiting for your input", `notification_type = idle_prompt`)

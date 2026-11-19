@@ -472,6 +472,38 @@
         <div class="vendel-hora"></div>
         <div class="vendel-rotulos"></div>
       </div>
+      <div class="vendel-ajustes vendel-controle">
+        <button type="button" class="vendel-forma" title="Megabrain: toque para transformar"></button>
+        <button type="button" class="vendel-voz"></button>
+        <button type="button" class="vendel-silencio"></button>
+      </div>
+      <!-- Privacidade: sempre a mostra. Mudo = microfone desligado; cego = camera desligada. -->
+      <div class="vendel-privacidade vendel-controle">
+        <button type="button" class="vendel-mudo" aria-label="Mudo: desligar o microfone">
+          <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/><path class="risco" d="M4 4l16 16"/></svg>
+          <span>mudo</span>
+        </button>
+        <button type="button" class="vendel-cego" aria-label="Cego: desligar a câmera">
+          <svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="risco" d="M4 4l16 16"/></svg>
+          <span>cego</span>
+        </button>
+      </div>
+      <button type="button" class="vendel-ver vendel-controle" aria-label="Mostrar algo para o Vendel">
+        <svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      </button>
+      <button type="button" class="vendel-mic vendel-controle" aria-label="Falar com o Vendel">
+        <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>
+      </button>
+      <div class="vendel-fala" hidden></div>
+      <div class="vendel-pergunta vendel-controle" hidden>
+        <p class="vendel-pergunta-texto"></p>
+        <div><button type="button" class="vendel-responder">Responder</button><button type="button" class="vendel-depois">Depois</button></div>
+      </div>
+      <div class="vendel-digitar vendel-controle" hidden>
+        <form><input type="text" id="vendel-texto" placeholder="Escreva para o Vendel…" autocomplete="off" enterkeyhint="send">
+          <button type="submit">Enviar</button><button type="button" class="vendel-cancelar">✕</button></form>
+      </div>
+      <div class="vendel-painel vendel-controle" hidden></div>
     </section>
   </main>
 
@@ -535,6 +567,6 @@
   <div class="overlay-apagar-tela" id="overlay-apagar-tela"></div>
 
   <script src="/static/app.js?v=26"></script>
-  <script src="/static/vendel.js?v=1"></script>
+  <script src="/static/vendel.js?v=3"></script>
 </body>
 </html>

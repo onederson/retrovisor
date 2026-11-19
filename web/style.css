@@ -2286,3 +2286,175 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .vendel-faixa[data-tipo="precisa"] { animation: none; }
 }
+
+/* ===== Vendel: conversa, perguntas, ajustes e resumo do dia ===== */
+.vendel-ajustes {
+  position: absolute;
+  top: 32px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.vendel-ajustes button {
+  background: transparent;
+  border: 0;
+  padding: 2px 4px;
+  font: inherit;
+  font-size: 11px;
+  color: #2f4a39;
+  cursor: pointer;
+}
+.vendel-ajustes button[aria-pressed="true"].vendel-silencio { color: var(--ambar); }
+.vendel-mic {
+  position: absolute;
+  right: 14px;
+  bottom: 50px;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #030603;
+  border: 1px solid var(--verde-escuro);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.vendel-mic svg { width: 22px; height: 22px; fill: none; stroke: var(--verde-2); stroke-width: 1.8; stroke-linecap: round; }
+.vendel-mic:active { background: var(--verde-escuro); }
+.vendel-fala {
+  position: absolute;
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(70%, 520px);
+  background: #030603;
+  border: 1px solid var(--verde-escuro);
+  border-radius: 14px;
+  padding: 8px 14px;
+  color: var(--texto);
+  font-size: 15px;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+}
+.vendel-fala[hidden], .vendel-pergunta[hidden], .vendel-digitar[hidden], .vendel-painel[hidden] { display: none; }
+.vendel-pergunta {
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(72%, 540px);
+  background: #030603;
+  border: 1px solid var(--verde);
+  border-radius: 14px;
+  padding: 10px 14px;
+  text-align: center;
+}
+.vendel-pergunta p { margin: 0 0 8px; color: var(--texto); font-size: 15px; line-height: 1.35; }
+.vendel-pergunta div { display: flex; gap: 10px; justify-content: center; }
+.vendel-pergunta button, .vendel-digitar button {
+  font: inherit;
+  font-size: 14px;
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--texto-2);
+  border: 1px solid var(--verde-escuro);
+}
+.vendel-pergunta .vendel-responder, .vendel-digitar button[type="submit"] { background: var(--verde-escuro); color: var(--verde); border-color: var(--verde-2); }
+.vendel-digitar {
+  position: absolute;
+  left: 50%;
+  top: 30px;
+  transform: translateX(-50%);
+  width: min(80%, 560px);
+}
+.vendel-digitar form { display: flex; gap: 8px; }
+.vendel-digitar input {
+  flex: 1;
+  min-width: 0;
+  background: #030603;
+  border: 1px solid var(--verde-2);
+  border-radius: 999px;
+  color: var(--texto);
+  font: inherit;
+  font-size: 15px;
+  padding: 7px 14px;
+}
+.vendel-painel {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  display: grid;
+  place-items: center;
+  z-index: 5;
+}
+.vendel-painel-caixa {
+  width: min(86%, 620px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.vendel-painel-topo { display: flex; justify-content: space-between; align-items: baseline; color: var(--texto-2); font-size: 13px; }
+.vendel-painel-topo b { color: var(--verde); font-size: 18px; }
+.vendel-painel-numeros { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.vendel-painel-numeros div { border: 1px solid var(--verde-escuro); border-radius: 10px; padding: 6px 8px; text-align: center; }
+.vendel-painel-numeros b { display: block; color: var(--texto); font-size: 18px; font-variant-numeric: tabular-nums; }
+.vendel-painel-numeros span { color: var(--texto-3); font-size: 11px; }
+.vendel-painel-projetos { display: flex; flex-direction: column; gap: 5px; }
+.vendel-painel-projetos p { margin: 0; color: var(--texto-3); font-size: 13px; }
+.vendel-barra { display: grid; grid-template-columns: 90px 1fr 54px; align-items: center; gap: 8px; font-size: 12px; }
+.vendel-barra span { color: var(--texto-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vendel-barra i { display: block; height: 6px; border-radius: 3px; background: var(--verde-2); }
+.vendel-barra em { font-style: normal; color: var(--texto-3); text-align: right; font-variant-numeric: tabular-nums; }
+.vendel-painel-motivo { margin: 0; color: var(--texto-3); font-size: 12px; }
+
+/* ===== Vendel: privacidade (mudo/cego), foto e formas ===== */
+.vendel-privacidade {
+  position: absolute;
+  left: 12px;
+  bottom: 50px;
+  display: flex;
+  gap: 8px;
+}
+.vendel-privacidade button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: #030603;
+  border: 1px solid var(--verde-escuro);
+  border-radius: 12px;
+  padding: 6px 8px 4px;
+  color: var(--texto-3);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+.vendel-privacidade svg, .vendel-ver svg {
+  width: 20px; height: 20px; fill: none; stroke: var(--texto-3); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.vendel-privacidade .risco { display: none; }
+.vendel-privacidade button[aria-pressed="true"] { border-color: var(--ambar); color: var(--ambar); }
+.vendel-privacidade button[aria-pressed="true"] svg { stroke: var(--ambar); }
+.vendel-privacidade button[aria-pressed="true"] .risco { display: inline; }
+.vendel-ver {
+  position: absolute;
+  right: 70px;
+  bottom: 54px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #030603;
+  border: 1px solid var(--verde-escuro);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.tela-vendel.cego .vendel-ver { opacity: 0.35; }
+.tela-vendel.mudo .vendel-mic svg { stroke: var(--texto-3); }
+.vendel-forma[data-forma="1"] { color: var(--verde-2) !important; }
+.vendel-forma[data-forma="2"] { color: var(--verde) !important; }
+.vendel-forma[data-forma="3"] { color: #FFD54A !important; text-shadow: 0 0 8px rgba(255, 201, 60, 0.6); }

@@ -6,6 +6,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from . import humor
+
 DIGITANDO = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 LENDO = {"Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch"}
 EXECUTANDO = {"Bash", "PowerShell"}
@@ -38,6 +40,11 @@ class Mini:
             "trabalhando_s": 0,
             "por_projeto": {},
         }
+        self.total_concluidas = 0
+        self.carinhos_hoje = 0
+        self.ultimo_toque = agora
+        self.ultimo_evento = agora
+        self._ultimo_gravou_toque = 0.0
         self._carregar_hoje()
 
     def _data_local(self, ts: float | None = None) -> str:
@@ -49,24 +56,40 @@ class Mini:
         try:
             if self.arquivo.exists():
                 conteudo = json.loads(self.arquivo.read_text(encoding="utf-8"))
-                if isinstance(conteudo, dict) and conteudo.get("data") == self.hoje["data"]:
-                    self.hoje["concluidas"] = int(conteudo.get("concluidas", 0))
-                    self.hoje["trabalhando_s"] = int(conteudo.get("trabalhando_s", 0))
-                    por_proj = conteudo.get("por_projeto", {})
-                    if isinstance(por_proj, dict):
-                        self.hoje["por_projeto"] = {str(k): int(v) for k, v in por_proj.items()}
+                if isinstance(conteudo, dict):
+                    if conteudo.get("data") == self.hoje["data"]:
+                        self.hoje["concluidas"] = int(conteudo.get("concluidas", 0))
+                        self.hoje["trabalhando_s"] = int(conteudo.get("trabalhando_s", 0))
+                        por_proj = conteudo.get("por_projeto", {})
+                        if isinstance(por_proj, dict):
+                            self.hoje["por_projeto"] = {str(k): int(v) for k, v in por_proj.items()}
+                        self.carinhos_hoje = int(conteudo.get("carinhos_hoje", 0))
+                    if "total_concluidas" in conteudo:
+                        self.total_concluidas = int(conteudo["total_concluidas"])
+                    if "ultimo_toque" in conteudo:
+                        self.ultimo_toque = float(conteudo["ultimo_toque"])
         except Exception:
+            agora = float(self.relogio())
             self.hoje = {
-                "data": self._data_local(),
+                "data": self._data_local(agora),
                 "concluidas": 0,
                 "trabalhando_s": 0,
                 "por_projeto": {},
             }
+            self.total_concluidas = 0
+            self.carinhos_hoje = 0
+            self.ultimo_toque = agora
 
     def _gravar_hoje(self):
         try:
             self.arquivo.parent.mkdir(parents=True, exist_ok=True)
-            self.arquivo.write_text(json.dumps(self.hoje, ensure_ascii=False), encoding="utf-8")
+            dados = {
+                **self.hoje,
+                "total_concluidas": self.total_concluidas,
+                "carinhos_hoje": self.carinhos_hoje,
+                "ultimo_toque": self.ultimo_toque,
+            }
+            self.arquivo.write_text(json.dumps(dados, ensure_ascii=False), encoding="utf-8")
         except Exception:
             pass
 
@@ -79,6 +102,7 @@ class Mini:
                 "trabalhando_s": 0,
                 "por_projeto": {},
             }
+            self.carinhos_hoje = 0
             self._gravar_hoje()
 
     def evento(self, dados: dict) -> bool:
@@ -95,6 +119,7 @@ class Mini:
 
         with self._lock:
             agora = float(self.relogio())
+            self.ultimo_evento = agora
             self._virar_dia_se_necessario(agora)
 
             s_existente = self.sessoes.get(sessao)
@@ -113,6 +138,7 @@ class Mini:
 
             if evt == "Stop" and estado_anterior_ativo:
                 self.hoje["concluidas"] += 1
+                self.total_concluidas += 1
                 mudou_contadores = True
 
             if mudou_contadores:
@@ -192,6 +218,25 @@ class Mini:
             self.seq += 1
             return True
 
+    def carinho(self):
+        with self._lock:
+            agora = float(self.relogio())
+            self._virar_dia_se_necessario(agora)
+            self.carinhos_hoje += 1
+            self.ultimo_toque = agora
+            self._gravar_hoje()
+            self._ultimo_gravou_toque = agora
+            self.seq += 1
+
+    def toque(self):
+        with self._lock:
+            agora = float(self.relogio())
+            self._virar_dia_se_necessario(agora)
+            self.ultimo_toque = agora
+            if agora - self._ultimo_gravou_toque >= 60.0:
+                self._gravar_hoje()
+                self._ultimo_gravou_toque = agora
+
     def snapshot(self) -> dict:
         with self._lock:
             agora = float(self.relogio())
@@ -242,6 +287,13 @@ class Mini:
                     "concluidas": int(self.hoje["concluidas"]),
                     "trabalhando_s": int(self.hoje["trabalhando_s"]),
                     "por_projeto": {str(k): int(v) for k, v in self.hoje["por_projeto"].items()},
+                },
+                "vida": {
+                    "nivel": humor.nivel(self.total_concluidas),
+                    "total_concluidas": int(self.total_concluidas),
+                    "carinhos_hoje": int(self.carinhos_hoje),
+                    "min_sem_toque": round(max(0.0, agora - self.ultimo_toque) / 60.0, 1),
+                    "min_sem_claude": round(max(0.0, agora - self.ultimo_evento) / 60.0, 1),
                 },
                 "seq": self.seq,
             }

@@ -60,3 +60,7 @@ OBS = { menu = "OBS Studio", exe = "obs64.exe" }
 Telegram = { menu = "Telegram", exe = "Telegram.exe" }
 Obsidian = { menu = "Obsidian", exe = "Obsidian.exe" }
 VLC = { menu = "VLC media player", exe = "vlc.exe" }
+
+[vendel]   # cerebro do Vendel (projeto Vendel): o painel sobe o servico sozinho
+cerebro = "C:/Users/Vendel/Desktop/Projetos/Vendel"
+python = "C:/Users/Vendel/AppData/Local/Programs/Python/Python311/pythonw.exe"

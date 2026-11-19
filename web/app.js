@@ -1443,7 +1443,7 @@
     if (!dados.energia) avisoEnergia(null);
     else if (dados.energia_seq !== ultimoSeqEnergia) { ultimoSeqEnergia = dados.energia_seq; avisoEnergia(dados.energia); }
     atualizarBloqueio(dados.bloqueio);
-    if (window.Vendel) window.Vendel.atualizar(dados.mini); // tela 8 (web/vendel.js)
+    if (window.Vendel) window.Vendel.atualizar(dados.mini, dados); // tela 8 (web/vendel.js)
 
     // Estado do microfone
     if (dados.mic_mudo !== undefined) {
@@ -1757,6 +1757,11 @@
   // Bateria do navegador para o servidor
   let gerenciadorBateria = null;
   let socketAtivo = null;
+  // web/vendel.js manda carinho/toque do Vendel por aqui
+  window.painelEnviar = (obj) => {
+    if (!socketAtivo || socketAtivo.readyState !== WebSocket.OPEN) return;
+    try { socketAtivo.send(JSON.stringify(obj)); } catch (e) {}
+  };
 
   async function inicializarApiBateria() {
     if ('getBattery' in navigator) {
